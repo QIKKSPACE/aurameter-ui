@@ -1,0 +1,27 @@
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- React Native root view -->
+    <com.facebook.react.ReactRootView
+        android:id="@+id/react_root"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- Splash overlay -->
+    <FrameLayout
+        android:id="@+id/splash_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/dark_navy">
+
+        <com.airbnb.lottie.LottieAnimationView
+            android:id="@+id/splash_anim"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            app:lottie_autoPlay="true"
+            app:lottie_loop="false"
+            app:lottie_rawRes="@raw/aura_splash" />
+    </FrameLayout>
+</FrameLayout>

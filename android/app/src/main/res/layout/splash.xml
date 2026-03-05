@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/splash_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000"
+    android:gravity="center">
+
+    <LinearLayout
+        android:orientation="vertical"
+        android:gravity="center"
+        android:layout_gravity="center"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content">
+
+<ImageView
+    android:id="@+id/splash_logo"
+    android:layout_width="230dp"
+    android:layout_height="140dp"
+    android:adjustViewBounds="true"
+    android:scaleType="centerInside"
+    android:src="@drawable/logomain"
+    android:alpha="0.0"
+    android:elevation="8dp"
+    android:outlineAmbientShadowColor="#80FFFFFF"
+    android:outlineSpotShadowColor="#80FFFFFF"/>
+
+      <TextView
+    android:id="@+id/splash_text"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:text="Your Vibe, Your Aura."
+    android:textColor="@android:color/white"
+    android:textSize="22sp"
+    android:fontFamily="sans-serif-medium"
+    android:layout_marginTop="2dp"
+    android:alpha="0.0"
+    android:shadowColor="#A0FFFFFF"
+    android:shadowDx="0"
+    android:shadowDy="0"
+    android:shadowRadius="14" />
+    </LinearLayout>
+
+</FrameLayout>

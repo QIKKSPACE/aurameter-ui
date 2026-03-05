@@ -1,0 +1,3 @@
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="#0f0f1f"/> <!-- same dark color as your animation background -->
+</shape>
