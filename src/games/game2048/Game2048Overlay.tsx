@@ -1,0 +1,104 @@
+import React, { useMemo } from 'react';
+import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Game2048State } from './Game2048Types';
+import { GAME_2048_COLORS } from './Game2048Colors';
+
+type Props = {
+  gameState: Game2048State;
+  onTryAgain: () => void;
+  onKeepGoing?: () => void;
+  onNewGame?: () => void;
+};
+
+export default function Game2048Overlay({
+  gameState,
+  onTryAgain,
+  onKeepGoing,
+  onNewGame,
+}: Props) {
+  const styles = useMemo(
+    () =>
+      StyleSheet.create({
+        overlay: {
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: 'rgba(238, 228, 218, 0.73)',
+        },
+        overlayText: {
+          fontSize: 40,
+          fontWeight: '700',
+          color: GAME_2048_COLORS.TITLE_COLOR,
+          marginBottom: 20,
+          textAlign: 'center',
+        },
+        overlayWinText: {
+          color: GAME_2048_COLORS.SCORE_TEXT,
+        },
+        overlayButton: {
+          backgroundColor: GAME_2048_COLORS.BUTTON_BG,
+          borderRadius: 4,
+          paddingHorizontal: 24,
+          paddingVertical: 12,
+          marginVertical: 8,
+        },
+        overlayButtonText: {
+          color: GAME_2048_COLORS.BUTTON_TEXT,
+          fontSize: 16,
+          fontWeight: '600',
+          textAlign: 'center',
+        },
+      }),
+    []
+  );
+
+  const isVisible = gameState.status === 'won' || gameState.status === 'lost';
+  const isWon = gameState.status === 'won';
+
+  return (
+    <Modal
+      visible={isVisible && gameState.status !== 'continuing'}
+      transparent
+      animationType="fade"
+      onRequestClose={() => {}}
+    >
+      <View style={styles.overlay}>
+        <View style={{ alignItems: 'center' }}>
+          <Text style={[styles.overlayText, isWon && styles.overlayWinText]}>
+            {isWon ? 'YOU WIN!' : 'GAME OVER!'}
+          </Text>
+
+          {isWon && onKeepGoing && (
+            <TouchableOpacity
+              style={styles.overlayButton}
+              onPress={onKeepGoing}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.overlayButtonText}>KEEP GOING</Text>
+            </TouchableOpacity>
+          )}
+
+          {!isWon && (
+            <TouchableOpacity
+              style={styles.overlayButton}
+              onPress={onTryAgain}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.overlayButtonText}>TRY AGAIN</Text>
+            </TouchableOpacity>
+          )}
+
+          {onNewGame && (
+            <TouchableOpacity
+              style={styles.overlayButton}
+              onPress={onNewGame}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.overlayButtonText}>NEW GAME</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+}

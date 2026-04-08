@@ -51,8 +51,12 @@ import OtherConnectionsScreen from "../screens/OtherConnectionsScreen";
 import Maths from "../screens/Maths";
 import CreateQuizScreen from "../screens/CreateQuizScreen";
 import AllQuizScreen from "../screens/AllQuizScreen";
-
-
+import SnakeGameScreen from "../games/snake/SnakeGameScreen";
+import { ZipGameScreen } from "../games/zip";
+import TicTacToeNavigator from "../games/tictactoe/TicTacToeNavigator";
+import KenKenScreen from "../screens/KenKenScreen";
+import MinesweeperScreen from "../screens/MinesweeperScreen";
+import Game2048Screen from "../screens/Game2048Screen";
 
 import TetrisTestScreen from "../screens/TetrisTestScreen";
 import UserQuiz from "../screens/UserQuiz";
@@ -124,11 +128,12 @@ const StackNavigator = () => {
           <Stack.Screen name="CreateQuiz" component={CreateQuizScreen} />
           <Stack.Screen name="AllQuiz" component={AllQuizScreen} />
           <Stack.Screen name="PlayQuiz" component={UserQuiz} />
-
-          
-
-
-
+          <Stack.Screen name="SnakeGame" component={SnakeGameScreen} />
+          <Stack.Screen name="ZipGame" component={ZipGameScreen} />
+          <Stack.Screen name="TicTacToe" component={TicTacToeNavigator} options={{ headerShown: false }} />
+          <Stack.Screen name="KenKenGame" component={KenKenScreen} />
+          <Stack.Screen name="MinesweeperGame" component={MinesweeperScreen} />
+          <Stack.Screen name="Game2048" component={Game2048Screen} />
 
 
 

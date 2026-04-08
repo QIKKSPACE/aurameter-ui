@@ -1,0 +1,143 @@
+import { StyleSheet } from "react-native";
+import { GAME_CONFIG } from "./GameConfig";
+
+export const createSnakeStyles = (theme: any, boardSize: number) =>
+  StyleSheet.create({
+    safeArea: {
+      flex: 1,
+    },
+    container: {
+      flex: 1,
+      paddingHorizontal: GAME_CONFIG.CONTAINER_PADDING_HORIZONTAL,
+      paddingTop: GAME_CONFIG.CONTAINER_PADDING_TOP,
+      paddingBottom: GAME_CONFIG.CONTAINER_PADDING_BOTTOM,
+    },
+    headerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: GAME_CONFIG.HEADER_MARGIN_BOTTOM,
+    },
+    closeButton: {
+      width: GAME_CONFIG.CLOSE_BUTTON_WIDTH,
+      height: GAME_CONFIG.CLOSE_BUTTON_HEIGHT,
+      borderRadius: GAME_CONFIG.CLOSE_BUTTON_BORDER_RADIUS,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.components.card,
+      borderWidth: 1,
+      borderColor: theme.components.border,
+    },
+    scoreCard: {
+      backgroundColor: theme.components.card,
+      borderWidth: 1,
+      borderColor: theme.components.border,
+      borderRadius: GAME_CONFIG.SCORE_CARD_BORDER_RADIUS,
+      padding: GAME_CONFIG.SCORE_CARD_PADDING,
+      marginBottom: GAME_CONFIG.SCORE_CARD_MARGIN_BOTTOM,
+      overflow: "hidden",
+    },
+    titleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: GAME_CONFIG.SCORE_CARD_TITLE_MARGIN_BOTTOM,
+    },
+    boardShell: {
+      width: boardSize,
+      alignSelf: "center",
+      padding: GAME_CONFIG.BOARD_PADDING,
+      borderRadius: GAME_CONFIG.BOARD_BORDER_RADIUS,
+      backgroundColor: theme.components.card,
+      borderWidth: 1,
+      borderColor: theme.components.border,
+      shadowColor: theme.text.accent,
+      shadowOpacity: GAME_CONFIG.BOARD_SHELL_SHADOW_OPACITY,
+      shadowRadius: GAME_CONFIG.BOARD_SHELL_SHADOW_RADIUS,
+      shadowOffset: { width: 0, height: GAME_CONFIG.BOARD_SHELL_SHADOW_OFFSET_Y },
+      elevation: GAME_CONFIG.BOARD_SHELL_ELEVATION,
+    },
+    boardFrame: {
+      width: "100%",
+      aspectRatio: 1,
+      borderRadius: GAME_CONFIG.BOARD_FRAME_BORDER_RADIUS,
+      overflow: "hidden",
+      backgroundColor:
+        theme.background.color === theme.components.card
+          ? GAME_CONFIG.BOARD_BACKGROUND_FALLBACK
+          : theme.background.color,
+    },
+    controlsWrap: {
+      marginTop: GAME_CONFIG.CONTROLS_WRAP_MARGIN_TOP,
+      borderRadius: GAME_CONFIG.CONTROLS_WRAP_BORDER_RADIUS,
+      padding: GAME_CONFIG.CONTROLS_WRAP_PADDING,
+      backgroundColor: theme.components.card,
+      borderWidth: 1,
+      borderColor: theme.components.border,
+    },
+    controlsHint: {
+      textAlign: "center",
+      marginTop: GAME_CONFIG.CONTROLS_HINT_MARGIN_TOP,
+      opacity: GAME_CONFIG.CONTROLS_HINT_OPACITY,
+    },
+    footerRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      marginTop: GAME_CONFIG.CHIP_MARGIN_TOP,
+    },
+    chip: {
+      flex: 1,
+      marginHorizontal: GAME_CONFIG.CHIP_MARGIN_HORIZONTAL,
+      paddingVertical: GAME_CONFIG.CHIP_PADDING_VERTICAL,
+      borderRadius: GAME_CONFIG.CHIP_BORDER_RADIUS,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.components.box,
+    },
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: `rgba(0,0,0,${GAME_CONFIG.MODAL_BACKDROP_OPACITY})`,
+      justifyContent: "center",
+      paddingHorizontal: 20,
+    },
+    modalCard: {
+      borderRadius: GAME_CONFIG.MODAL_CARD_BORDER_RADIUS,
+      padding: GAME_CONFIG.MODAL_CARD_PADDING,
+      backgroundColor: theme.components.card,
+      borderWidth: 1,
+      borderColor: theme.components.border,
+    },
+    modalButtons: {
+      flexDirection: "row",
+      marginTop: GAME_CONFIG.MODAL_BUTTONS_MARGIN_TOP,
+    },
+    modalButton: {
+      flex: 1,
+      minHeight: GAME_CONFIG.MODAL_CARD_BUTTON_HEIGHT,
+      borderRadius: GAME_CONFIG.MODAL_CARD_BUTTON_BORDER_RADIUS,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: theme.components.border,
+      marginHorizontal: GAME_CONFIG.MODAL_BUTTON_HORIZONTAL_MARGIN,
+    },
+    primaryButton: {
+      backgroundColor: theme.text.accent,
+      borderColor: theme.text.accent,
+    },
+    countdownOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "rgba(0,0,0,0.18)",
+    },
+    pausedBadge: {
+      position: "absolute",
+      top: 12,
+      right: 12,
+      paddingHorizontal: GAME_CONFIG.PAUSED_BADGE_PADDING_HORIZONTAL,
+      paddingVertical: GAME_CONFIG.PAUSED_BADGE_PADDING_VERTICAL,
+      borderRadius: GAME_CONFIG.PAUSED_BADGE_BORDER_RADIUS,
+      backgroundColor: GAME_CONFIG.PAUSED_BADGE_BACKGROUND,
+    },
+  });

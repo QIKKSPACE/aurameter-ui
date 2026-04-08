@@ -73,3 +73,24 @@ yarn-error.log
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+# Debug build logs
+debug.log
+*.log
+
+# Development automation scripts
+start-emulator.bat
+start-emulator.sh
+
+# Environment variable files
+.env
+.env.local
+.env.production
+.env.staging
+
+# VS Code workspace settings
+.vscode/
+
+# Test output artifacts
+jest-results/
+*.lcov
