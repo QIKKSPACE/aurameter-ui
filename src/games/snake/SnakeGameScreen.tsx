@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { TouchableOpacity, View, useWindowDimensions, Modal } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import ScreenBackground from "../../components/ScreenBackground";
 import AppText from "../../components/AppText";
@@ -23,11 +23,20 @@ export { snakeChallenge } from "./SnakeTypes";
 export { submitSnakeScore } from "./useSnakeGame";
 
 export default function SnakeGameScreen({ navigation }: Props) {
+  const insets = useSafeAreaInsets();
   const { theme } = useTheme();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const [isNavigating, setIsNavigating] = React.useState(false); // ✅ Prevent double-tap back
   
-  const boardSize = Math.min(width - GAME_CONFIG.CONTAINER_PADDING_HORIZONTAL * 2, 360);
+  const boardSize = useMemo(() => {
+    const HEADER_HEIGHT = 160; // header + score display + tier
+    const CONTROLS_HEIGHT = 280; // d-pad + margins
+    const SAFE_BOTTOM = insets.bottom;
+    const availableHeight = height - HEADER_HEIGHT - CONTROLS_HEIGHT - SAFE_BOTTOM - 32;
+    const maxByWidth = width - GAME_CONFIG.CONTAINER_PADDING_HORIZONTAL * 2;
+    const maxByHeight = availableHeight;
+    return Math.min(maxByWidth, maxByHeight, 360);
+  }, [width, height, insets.bottom]);
   const styles = useMemo(() => createSnakeStyles(theme, boardSize), [boardSize, theme]);
   const {
     collisionToken,
@@ -133,12 +142,14 @@ export default function SnakeGameScreen({ navigation }: Props) {
           />
 
           {/* Controls */}
-          <SnakeControls 
-            onDirectionChange={setDirection} 
-            onSpeedBoost={handleMultipleTaps}
-            styles={styles} 
-            theme={theme} 
-          />
+          <View style={{ paddingBottom: Math.max(insets.bottom, 16) }}>
+            <SnakeControls 
+              onDirectionChange={setDirection} 
+              onSpeedBoost={handleMultipleTaps}
+              styles={styles} 
+              theme={theme} 
+            />
+          </View>
         </View>
       </SafeAreaView>
 

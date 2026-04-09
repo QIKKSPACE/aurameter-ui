@@ -1,5 +1,6 @@
 import React, { useEffect, useCallback, useMemo } from 'react';
-import { View, StyleSheet, StatusBar, Text, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, StatusBar, Text, TouchableOpacity, useWindowDimensions } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
 import { useTicTacToeContext } from './TicTacToeContext';
 import AnimatedBackground from './AnimatedBackground';
@@ -8,6 +9,8 @@ import XPBar from './XPBar';
 import { LEVELS } from './levelManager';
 
 const GameScreen = ({ navigation, route }) => {
+    const insets = useSafeAreaInsets();
+    const { width, height } = useWindowDimensions();
     const level = route?.params?.level || 1;
     const gameKey = route?.params?.gameKey || 0;
     const {
@@ -76,11 +79,11 @@ const GameScreen = ({ navigation, route }) => {
     }, [navigation]);
 
     return (
-        <View style={styles.container}>
+        <SafeAreaView style={[styles.container, { backgroundColor: theme.cardBg }]}>
             <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
             <AnimatedBackground theme={theme} />
 
-            <View style={styles.content}>
+            <View style={[styles.content, { paddingBottom: Math.max(insets.bottom, 16) }]}>
                 <View style={[styles.topBar, { backgroundColor: theme.cardBg, borderColor: theme.boardBorder }]}>
                     <View>
                         <Text style={[styles.eyebrow, { color: theme.textSecondary }]}>
@@ -129,7 +132,7 @@ const GameScreen = ({ navigation, route }) => {
 
             {gameOver && result && (
                 <View style={styles.resultBackdrop}>
-                    <View style={[styles.resultCard, { backgroundColor: theme.cardBg, borderColor: theme.boardBorder }]}>
+                    <View style={[styles.resultCard, { backgroundColor: theme.cardBg, borderColor: theme.boardBorder, paddingBottom: Math.max(insets.bottom, 16) }]}>
                         <Text style={styles.resultEmoji}>{resultEmoji}</Text>
                         <Text style={[styles.resultTitle, { color: theme.textColor }]}>
                             {resultTitle}
@@ -200,7 +203,7 @@ const GameScreen = ({ navigation, route }) => {
                     </View>
                 </View>
             )}
-        </View>
+        </SafeAreaView>
     );
 };
 

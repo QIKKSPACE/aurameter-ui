@@ -5,7 +5,7 @@
 
 import React, { useMemo, useState, useCallback } from "react";
 import { Modal, ScrollView, TouchableOpacity, View, useWindowDimensions, AppState } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import ScreenBackground from "../../components/ScreenBackground";
 import AppText from "../../components/AppText";
@@ -29,13 +29,19 @@ type Props = {
 export { zipChallenge } from "./ZipTypes";
 
 export default function ZipGameScreen({ navigation }: Props) {
+  const insets = useSafeAreaInsets();
   const { theme } = useTheme();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const [showCompletion, setShowCompletion] = useState(false);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false); // ✅ Prevent double-tap back
 
-  const boardSize = Math.min(width - 32, 360);
+  const boardSize = useMemo(() => {
+    const HEADER_HEIGHT = 100; // header + stats
+    const CONTROLS_HEIGHT = 120; // controls + how-to-play
+    const availableHeight = height - HEADER_HEIGHT - CONTROLS_HEIGHT - insets.top - insets.bottom - 32;
+    return Math.min(width - 32, availableHeight, 360);
+  }, [width, height, insets.top, insets.bottom]);
   const styles = useMemo(() => createZipStyles(theme, boardSize), [boardSize, theme]);
 
   const {
@@ -199,7 +205,7 @@ export default function ZipGameScreen({ navigation }: Props) {
           </View>
 
           {/* Controls */}
-          <View style={styles.controlsRow}>
+          <View style={[styles.controlsRow, { paddingBottom: Math.max(insets.bottom, 12) }]}>
             <TouchableOpacity
               style={[
                 styles.controlButton,

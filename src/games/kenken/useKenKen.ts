@@ -36,7 +36,18 @@ export const useKenKen = (levelId: number = 1) => {
       if (savedProgress) {
         try {
           const parsed = JSON.parse(savedProgress);
-          state = parsed;
+          if (parsed.isCompleted) {
+            state = {
+              level,
+              grid: initializeGrid(level),
+              selectedCell: null,
+              isCompleted: false,
+              mistakesCount: 0,
+              isPencilMode: false,
+            };
+          } else {
+            state = parsed;
+          }
         } catch {
           state = {
             level,
@@ -94,10 +105,27 @@ export const useKenKen = (levelId: number = 1) => {
       } catch (_) {
         // ignore
       }
-      AsyncStorage.setItem(
-        `@aurameter/kenken-progress-${gameState.level.id}`,
-        JSON.stringify(gameState)
-      );
+
+      const clearProgress = async () => {
+        try {
+          await AsyncStorage.removeItem(`@aurameter/kenken-progress-${gameState.level.id}`);
+        } catch (_) {
+          // ignore
+        }
+      };
+      clearProgress();
+    } else {
+      const saveProgress = async () => {
+        try {
+          await AsyncStorage.setItem(
+            `@aurameter/kenken-progress-${gameState.level.id}`,
+            JSON.stringify(gameState)
+          );
+        } catch (_) {
+          // ignore
+        }
+      };
+      saveProgress();
     }
   }, [gameState]);
 

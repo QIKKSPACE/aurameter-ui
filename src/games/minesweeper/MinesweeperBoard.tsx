@@ -11,16 +11,20 @@ type Props = {
 };
 
 export default function MinesweeperBoard({ gameState, onCellTap, onCellLongPress }: Props) {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const config = DIFFICULTY_CONFIGS[gameState.difficulty];
 
   const cellSize = useMemo(() => {
     if (config.cellSize === 0) {
+      // Dynamic sizing - account for both width and height
       const padding = 32;
-      return Math.floor((width - padding) / config.cols);
+      const maxByWidth = Math.floor((width - padding) / config.cols);
+      // Account for header (~60dp) + difficulty bar (~44dp) + margins (~40dp)
+      const maxByHeight = Math.floor((height - 144) / config.rows);
+      return Math.min(maxByWidth, maxByHeight);
     }
     return config.cellSize;
-  }, [config, width]);
+  }, [config, width, height]);
 
   const isScrollable = gameState.difficulty === 'hard' || gameState.difficulty === 'huge';
 

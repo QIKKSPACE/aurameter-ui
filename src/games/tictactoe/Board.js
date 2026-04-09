@@ -4,12 +4,11 @@
  */
 
 import React, { memo, useMemo } from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import Cell from './Cell';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
 const Board = ({ board, onCellPress, theme, result, disabled, boardSize = 3 }) => {
+    const { width: SCREEN_WIDTH } = useWindowDimensions();
     const winningCells = useMemo(() => {
         if (result?.line) {
             return new Set(result.line);

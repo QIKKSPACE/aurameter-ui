@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Game2048State } from './Game2048Types';
 import { GAME_2048_COLORS } from './Game2048Colors';
 
@@ -16,6 +17,7 @@ export default function Game2048Overlay({
   onKeepGoing,
   onNewGame,
 }: Props) {
+  const insets = useSafeAreaInsets();
   const styles = useMemo(
     () =>
       StyleSheet.create({
@@ -63,7 +65,7 @@ export default function Game2048Overlay({
       onRequestClose={() => {}}
     >
       <View style={styles.overlay}>
-        <View style={{ alignItems: 'center' }}>
+        <View style={[{ alignItems: 'center', paddingBottom: Math.max(insets.bottom, 16) }]}>
           <Text style={[styles.overlayText, isWon && styles.overlayWinText]}>
             {isWon ? 'YOU WIN!' : 'GAME OVER!'}
           </Text>

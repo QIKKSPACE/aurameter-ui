@@ -1,9 +1,6 @@
 import React, { useMemo } from 'react';
-import { Modal, TouchableOpacity, View, StyleSheet } from 'react-native';
-import LinearGradient from 'react-native-linear-gradient';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { Modal, TouchableOpacity, View, StyleSheet, useWindowDimensions } from 'react-native';
 import AppText from '../../components/AppText';
-import { KENKEN_COLORS } from './KenKenColors';
 
 type Props = {
   visible: boolean;
@@ -24,6 +21,8 @@ const KenKenVictoryModalComponent = ({
   onNextLevel,
   onHome,
 }: Props) => {
+  const { width: screenWidth } = useWindowDimensions();
+
   const styles = useMemo(() => {
     return StyleSheet.create({
       overlay: {
@@ -32,99 +31,104 @@ const KenKenVictoryModalComponent = ({
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(0,0,0,0.85)',
+        backgroundColor: 'rgba(0, 0, 0, 0.82)',
         justifyContent: 'center',
         alignItems: 'center',
-        zIndex: 1000,
+        zIndex: 999,
       },
       card: {
-        width: '80%',
-        backgroundColor: KENKEN_COLORS.VICTORY_CARD_BG,
-        borderRadius: 16,
-        padding: 24,
-        maxWidth: 350,
-        alignItems: 'center',
-      },
-      cardTop: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        width: '100%',
-        marginBottom: 16,
-      },
-      cardButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 10,
-        backgroundColor: KENKEN_COLORS.ACTION_BUTTON_BG,
-        justifyContent: 'center',
-        alignItems: 'center',
-      },
-      titleGradient: {
-        paddingVertical: 16,
+        backgroundColor: '#1C1C1E',
+        borderRadius: 24,
+        width: screenWidth - 48,
         paddingHorizontal: 24,
-        borderRadius: 12,
-        marginVertical: 16,
+        paddingTop: 48,
+        paddingBottom: 40,
+        alignItems: 'center',
       },
       title: {
-        fontSize: 36,
+        fontSize: 32,
         fontWeight: '800',
-        textAlign: 'center',
-        color: KENKEN_COLORS.VICTORY_TITLE_COLOR_START,
+        letterSpacing: 0,
+        color: '#00E5CC',
+        marginBottom: 8,
+      },
+      subtitle: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: 'rgba(255,255,255,0.5)',
+        marginBottom: 28,
       },
       statsRow: {
         flexDirection: 'row',
-        justifyContent: 'space-around',
         width: '100%',
-        marginBottom: 20,
+        marginBottom: 28,
         gap: 8,
       },
       stat: {
-        backgroundColor: KENKEN_COLORS.SCORE_BADGE_BG,
-        borderRadius: 10,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        alignItems: 'center',
+        backgroundColor: '#2C2C2E',
+        borderRadius: 12,
+        paddingVertical: 12,
+        paddingHorizontal: 8,
         flex: 1,
+        alignItems: 'center',
       },
       statLabel: {
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: '600',
-        color: 'rgba(255,255,255,0.6)',
-        marginBottom: 4,
+        color: 'rgba(255,255,255,0.4)',
+        letterSpacing: 1,
+        marginBottom: 6,
       },
       statValue: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: KENKEN_COLORS.SCORE_TEXT,
-      },
-      buttonsRow: {
-        flexDirection: 'row',
-        gap: 12,
-        width: '100%',
-        marginTop: 16,
-      },
-      button: {
-        flex: 1,
-        height: 52,
-        borderRadius: 12,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: KENKEN_COLORS.ACTION_BUTTON_BG,
-      },
-      buttonPrimary: {
-        borderWidth: 2,
-        borderColor: KENKEN_COLORS.VICTORY_NEW_GAME_BORDER,
-      },
-      buttonText: {
-        fontSize: 14,
+        fontSize: 22,
         fontWeight: '700',
         color: '#FFFFFF',
       },
-      buttonTextPrimary: {
-        color: KENKEN_COLORS.VICTORY_NEW_GAME_BORDER,
+      buttonsRow: {
+        flexDirection: 'row',
+        width: '100%',
+        marginBottom: 0,
+      },
+      buttonReplay: {
+        flex: 1,
+        height: 52,
+        borderRadius: 14,
+        backgroundColor: '#2C2C2E',
+        marginRight: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+      },
+      buttonNext: {
+        flex: 1,
+        height: 52,
+        borderRadius: 14,
+        backgroundColor: 'transparent',
+        borderWidth: 2,
+        borderColor: '#39FF14',
+        marginLeft: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+      },
+      buttonTextReplay: {
+        fontSize: 15,
+        fontWeight: '700',
+        color: 'rgba(255,255,255,0.7)',
+      },
+      buttonTextNext: {
+        fontSize: 15,
+        fontWeight: '700',
+        color: '#39FF14',
+      },
+      homeButton: {
+        marginTop: 16,
+      },
+      homeButtonText: {
+        fontSize: 13,
+        fontWeight: '500',
+        color: 'rgba(255,255,255,0.35)',
       },
     });
-  }, []);
+  }, [screenWidth]);
 
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
@@ -138,21 +142,9 @@ const KenKenVictoryModalComponent = ({
     <Modal transparent visible={visible} animationType="fade">
       <View style={styles.overlay}>
         <View style={styles.card}>
-          <View style={styles.cardTop}>
-            <TouchableOpacity activeOpacity={0.7} onPress={onHome} style={styles.cardButton}>
-              <Icon name="home" size={20} color={KENKEN_COLORS.ACTION_BUTTON_ICON} />
-            </TouchableOpacity>
-            <View style={{ width: 44 }} />
-          </View>
+          <AppText style={styles.title}>COMPLETED</AppText>
 
-          <LinearGradient
-            colors={[KENKEN_COLORS.VICTORY_TITLE_COLOR_START, KENKEN_COLORS.VICTORY_TITLE_COLOR_END]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.titleGradient}
-          >
-            <AppText style={styles.title}>COMPLETE</AppText>
-          </LinearGradient>
+          <AppText style={styles.subtitle}>Puzzle solved!</AppText>
 
           <View style={styles.statsRow}>
             <View style={styles.stat}>
@@ -170,13 +162,17 @@ const KenKenVictoryModalComponent = ({
           </View>
 
           <View style={styles.buttonsRow}>
-            <TouchableOpacity activeOpacity={0.7} onPress={onReplay} style={styles.button}>
-              <AppText style={styles.buttonText}>REPLAY</AppText>
+            <TouchableOpacity activeOpacity={0.7} onPress={onReplay} style={styles.buttonReplay}>
+              <AppText style={styles.buttonTextReplay}>REPLAY</AppText>
             </TouchableOpacity>
-            <TouchableOpacity activeOpacity={0.7} onPress={onNextLevel} style={[styles.button, styles.buttonPrimary]}>
-              <AppText style={[styles.buttonText, styles.buttonTextPrimary]}>NEXT LEVEL</AppText>
+            <TouchableOpacity activeOpacity={0.7} onPress={onNextLevel} style={styles.buttonNext}>
+              <AppText style={styles.buttonTextNext}>NEXT LEVEL</AppText>
             </TouchableOpacity>
           </View>
+
+          <TouchableOpacity activeOpacity={0.7} onPress={onHome} style={styles.homeButton}>
+            <AppText style={styles.homeButtonText}>Back to Home</AppText>
+          </TouchableOpacity>
         </View>
       </View>
     </Modal>

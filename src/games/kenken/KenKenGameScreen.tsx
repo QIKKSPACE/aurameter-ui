@@ -1,6 +1,7 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useEffect, useState } from 'react';
 import { ScrollView, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import ScreenBackground from '../../components/ScreenBackground';
 import AppText from '../../components/AppText';
 import { useTheme } from '../../constants/context/ThemeContext';
@@ -10,6 +11,7 @@ import { KenKenHeader } from './KenKenHeader';
 import { KenKenActionBar } from './KenKenActionBar';
 import { KenKenNumberPad } from './KenKenNumberPad';
 import { KenKenVictoryModal } from './KenKenVictoryModal';
+import { KenKenHowToPlay } from './KenKenHowToPlay';
 import { KENKEN_COLORS, getDifficultyColor } from './KenKenColors';
 import { createKenKenStyles } from './KenKenStyles';
 
@@ -22,6 +24,7 @@ type Props = {
 
 export const KenKenGameScreen = ({ navigation, levelId = 1 }: Props) => {
   const insets = useSafeAreaInsets();
+  const [showHowToPlay, setShowHowToPlay] = useState(false);
   const {
     gameState,
     elapsedSeconds,
@@ -41,6 +44,30 @@ export const KenKenGameScreen = ({ navigation, levelId = 1 }: Props) => {
 
   const { width } = useWindowDimensions();
   const styles = useMemo(() => createKenKenStyles(gameState?.level.gridSize || 4, width), [gameState?.level.gridSize, width]);
+
+  useEffect(() => {
+    const checkHowToPlay = async () => {
+      try {
+        const seen = await AsyncStorage.getItem('@aurameter/kenken-howtoplay-seen');
+        if (!seen) {
+          setShowHowToPlay(true);
+        }
+      } catch (_) {
+        // ignore
+      }
+    };
+
+    checkHowToPlay();
+  }, []);
+
+  const handleHowToPlayContinue = useCallback(async () => {
+    try {
+      await AsyncStorage.setItem('@aurameter/kenken-howtoplay-seen', 'true');
+    } catch (_) {
+      // ignore
+    }
+    setShowHowToPlay(false);
+  }, []);
 
   const handleBackPress = useCallback(() => {
     navigation.goBack();
@@ -130,6 +157,8 @@ export const KenKenGameScreen = ({ navigation, levelId = 1 }: Props) => {
           onNextLevel={handleNextLevelPress}
           onHome={handleHomePress}
         />
+
+        {showHowToPlay && <KenKenHowToPlay onContinue={handleHowToPlayContinue} />}
       </SafeAreaView>
     </ScreenBackground>
   );
