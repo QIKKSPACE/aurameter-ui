@@ -41,7 +41,8 @@ const challenges = [
   { id: "12", title: "Zip Challenge", icon: "lightning-bolt", color: "white", screen: "ZipGame" },
   { id: "13", title: "Minesweeper", icon: "landmine", color: "white", screen: "MinesweeperGame" },
   { id: "14", title: "2048", icon: "numeric", color: "white", screen: "Game2048" },
-  { id: "15", title: "Tic Tac Toe", icon: "noughts-and-crosses", color: "white", screen: "TicTacToe" },
+  { id: "15", title: "Math Maze", icon: "maze", color: "white", screen: "MathMaze" },
+  { id: "16", title: "Tic Tac Toe", icon: "noughts-and-crosses", color: "white", screen: "TicTacToe" },
 ];
 
 const auraTasks = [
