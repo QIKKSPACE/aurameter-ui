@@ -27,7 +27,7 @@ export type MazePuzzle = {
 export type PathStatus = 'idle' | 'drawing' | 'correct' | 'wrong'
 
 export type MathMazeGameState = {
-  puzzle: MazePuzzle
+  puzzle: MazePuzzle | null
   currentPath: PathStep[]
   pathStatus: PathStatus
   currentResult: number | null

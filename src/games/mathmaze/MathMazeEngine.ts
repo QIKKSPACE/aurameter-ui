@@ -1,5 +1,18 @@
 import type { MazePuzzle, PathStep, GridCell, MathOperator, CellType } from './MathMazeTypes'
 
+// ═══════════════════════════════════════════════════════════
+// SEEDED RANDOM NUMBER GENERATOR
+// ═══════════════════════════════════════════════════════════
+// Returns a deterministic random function for a given seed.
+// Same seed always produces same sequence of random numbers.
+function seededRandom(seed: number): () => number {
+  let s = seed
+  return () => {
+    s = (s * 1664525 + 1013904223) & 0xffffffff
+    return (s >>> 0) / 0xffffffff
+  }
+}
+
 export function findSolutions(puzzle: MazePuzzle): PathStep[][] {
   const solutions: PathStep[][] = []
   const { gridSize, grid, target } = puzzle
@@ -58,7 +71,8 @@ export function findSolutions(puzzle: MazePuzzle): PathStep[][] {
 }
 
 
-function generateValidPath(gridSize: number): PathStep[] {
+function generateValidPath(gridSize: number, rand?: () => number): PathStep[] {
+  const random = rand || Math.random
   const path: PathStep[] = [{ row: 0, col: 0 }]
   const visited = new Set<string>(['0,0'])
   const endRow = gridSize - 1
@@ -100,10 +114,10 @@ function generateValidPath(gridSize: number): PathStep[] {
     })
 
     let next: PathStep
-    if (Math.random() < 0.6) {
+    if (random() < 0.6) {
       next = unvisited[0] // Prefer closer
     } else {
-      next = unvisited[Math.floor(Math.random() * unvisited.length)]
+      next = unvisited[Math.floor(random() * unvisited.length)]
     }
 
     path.push(next)
@@ -126,77 +140,85 @@ function getDivisors(num: number): number[] {
   return divisors
 }
 
-function evaluatePathCells(cells: Array<{ type: CellType; value: number | MathOperator }>): number {
-  const numberCells = cells.filter((c) => c.type === 'number')
-  const operatorCells = cells.filter((c) => c.type === 'operator')
 
-  if (numberCells.length === 0) return NaN
-  if (numberCells.length !== operatorCells.length + 1) return NaN
 
-  let result = (numberCells[0].value as number)
-
-  for (let i = 0; i < operatorCells.length; i++) {
-    const op = operatorCells[i].value as MathOperator
-    const nextNum = numberCells[i + 1].value as number
-
-    if (op === '+') {
-      result = result + nextNum
-    } else if (op === '-') {
-      result = result - nextNum
-    } else if (op === '*') {
-      result = result * nextNum
-    } else if (op === '/') {
-      if (nextNum === 0) return NaN
-      if (result % nextNum !== 0) return NaN
-      result = result / nextNum
-    }
-  }
-
-  return result
+function deepFreezeGrid(grid: GridCell[][]): void {
+  grid.forEach((row) => {
+    row.forEach((cell) => {
+      Object.freeze(cell)
+    })
+    Object.freeze(row)
+  })
+  Object.freeze(grid)
 }
 
-function tryGeneratePuzzle(gridSize: number): MazePuzzle | null {
-  // STEP 1 — Generate valid solution path
-  const path = generateValidPath(gridSize)
+function tryBuildPuzzle(gridSize: number, seed?: number): MazePuzzle | null {
+  const rand = seed !== undefined ? seededRandom(seed) : Math.random
+
+  // STEP 1 — Generate a random valid path from (0,0) to (N-1,N-1)
+  const path = generateValidPath(gridSize, rand)
   if (path.length === 0 || path.length < 3) return null
   if (path.length % 2 === 0) return null // Must be odd: num-op-num...
 
-  // STEP 3 — Generate values for solution path with safe division
+  // Verify path ends on a NUMBER position using checkerboard
+  const endRow = gridSize - 1
+  const endCol = gridSize - 1
+  const endIsNumber = (endRow + endCol) % 2 === 0
+  if (!endIsNumber) return null // End must be on a number cell
+
+  // STEP 3 — Assign cell types using checkerboard pattern for ENTIRE grid
+  // (This will be done when we create the grid)
+
+  // STEP 4 — Assign values to cells ON the solution path
   const pathCellData: Array<{ type: CellType; value: number | MathOperator }> = []
 
   for (let i = 0; i < path.length; i++) {
     if (i % 2 === 0) {
       // NUMBER cell
-      pathCellData.push({ type: 'number', value: Math.floor(Math.random() * 9) + 1 })
+      pathCellData.push({ type: 'number', value: Math.floor(rand() * 9) + 1 })
     } else {
-      // OPERATOR cell
-      const operators: MathOperator[] = ['+', '-', '*', '/']
-      let op = operators[Math.floor(Math.random() * 4)]
+      // OPERATOR cell - choose intelligently
+      let op: MathOperator = '+'
 
-      // For division, ensure next number divides current result
-      if (op === '/' && pathCellData.length > 0) {
+      if (pathCellData.length > 0) {
         // Calculate current result so far
-        const cellsSoFar = pathCellData
-        let result = (cellsSoFar[0].value as number)
-        for (let j = 1; j < cellsSoFar.length; j += 2) {
-          const currentOp = cellsSoFar[j].value as MathOperator
-          const currentNum = cellsSoFar[j + 1]?.value as number
+        let result = (pathCellData[0].value as number)
+        for (let j = 1; j < pathCellData.length; j += 2) {
+          const currentOp = pathCellData[j].value as MathOperator
+          const currentNum = pathCellData[j + 1]?.value as number
           if (currentOp === '+') result += currentNum
           else if (currentOp === '-') result -= currentNum
           else if (currentOp === '*') result *= currentNum
           else if (currentOp === '/') {
-            if (currentNum === 0) result = NaN
-            else result = result / currentNum
+            if (currentNum === 0 || result % currentNum !== 0) {
+              result = NaN
+              break
+            }
+            result = result / currentNum
           }
         }
 
         if (Number.isFinite(result) && result !== 0) {
-          const divisors = getDivisors(Math.abs(Math.floor(result)))
-          if (divisors.length === 0) {
-            op = '+' // Fallback
+          // Try to pick a good operator
+          const operators: MathOperator[] = ['+', '-', '*', '/']
+          const validOps: MathOperator[] = []
+
+          for (const candidate of operators) {
+            if (candidate === '/' && result !== 0) {
+              const divisors = getDivisors(Math.abs(Math.floor(result)))
+              if (divisors.length > 0) {
+                validOps.push(candidate)
+              }
+            } else if (candidate !== '/') {
+              validOps.push(candidate)
+            }
           }
-        } else {
-          op = '+' // Fallback
+
+          if (validOps.length > 0) {
+            op = validOps[Math.floor(rand() * validOps.length)]
+          } else {
+            op = '+'
+          }
         }
       }
 
@@ -204,15 +226,19 @@ function tryGeneratePuzzle(gridSize: number): MazePuzzle | null {
     }
   }
 
-  // STEP 4 — Calculate target from solution path
+  // STEP 4b — Calculate and validate target from solution path
   const target = evaluatePathCells(pathCellData)
 
+  // Validate target
   if (!Number.isFinite(target)) return null
-  if (target !== Math.round(target)) return null // Must be whole integer
-  if (target < -99 || target > 999) return null
-  if (target === 0 && Math.random() > 0.1) return null // Avoid 0 most of time
+  if (target !== Math.floor(target)) return null // Must be whole integer
+  if (target <= -100 || target >= 1000) return null // Keep in reasonable range
+  if (target === 0) {
+    // Allow 0 but less frequently
+    if (rand() > 0.3) return null
+  }
 
-  // STEP 5 — Build the full grid
+  // STEP 5 — Build the full grid with checkerboard pattern
   const grid: GridCell[][] = Array(gridSize)
     .fill(null)
     .map(() =>
@@ -221,10 +247,14 @@ function tryGeneratePuzzle(gridSize: number): MazePuzzle | null {
         .map(() => ({ type: 'number' as CellType, value: 1 }))
     )
 
+  // Mark which cells are on the path for verification later
+  const pathSet = new Set<string>()
+
   // Fill solution path cells
   for (let i = 0; i < path.length; i++) {
     const { row, col } = path[i]
     const data = pathCellData[i]
+    pathSet.add(`${row},${col}`)
     grid[row][col] = {
       row,
       col,
@@ -232,17 +262,19 @@ function tryGeneratePuzzle(gridSize: number): MazePuzzle | null {
       value: data.value,
       isOnPath: true,
       isStart: row === 0 && col === 0,
-      isEnd: row === gridSize - 1 && col === gridSize - 1,
+      isEnd: row === endRow && col === endCol,
     }
   }
 
   // Fill non-path cells with checkerboard pattern
   for (let row = 0; row < gridSize; row++) {
     for (let col = 0; col < gridSize; col++) {
-      if (grid[row][col].isOnPath) continue
+      if (pathSet.has(`${row},${col}`)) continue
 
       const isNumber = (row + col) % 2 === 0
-      const value = isNumber ? Math.floor(Math.random() * 9) + 1 : ['+', '-', '*', '/'][Math.floor(Math.random() * 4)]
+      const value = isNumber
+        ? Math.floor(rand() * 9) + 1
+        : ['+', '-', '*', '/'][Math.floor(rand() * 4)]
 
       grid[row][col] = {
         row,
@@ -256,7 +288,7 @@ function tryGeneratePuzzle(gridSize: number): MazePuzzle | null {
     }
   }
 
-  // STEP 6 — Verify at least one solution exists
+  // STEP 6 — VERIFY the puzzle is solvable
   const solutions = findSolutions({
     gridSize,
     grid,
@@ -266,181 +298,169 @@ function tryGeneratePuzzle(gridSize: number): MazePuzzle | null {
 
   if (solutions.length === 0) return null
 
-  return {
+  // Deep freeze the puzzle to prevent accidental mutation
+  deepFreezeGrid(grid)
+  const frozenPuzzle = Object.freeze({
     gridSize,
     grid,
     target,
     solutionPath: path,
-  }
+  })
+  return frozenPuzzle
 }
 
-function getHardcodedFallback(gridSize: number): MazePuzzle {
+function buildFallbackPuzzle(gridSize: number): MazePuzzle {
   if (gridSize === 3) {
-    const grid: GridCell[][] = [
-      [
-        { row: 0, col: 0, type: 'number', value: 6, isStart: true, isEnd: false, isOnPath: true },
-        { row: 0, col: 1, type: 'operator', value: '+', isStart: false, isEnd: false, isOnPath: true },
-        { row: 0, col: 2, type: 'number', value: 3, isStart: false, isEnd: false, isOnPath: true },
-      ],
-      [
-        { row: 1, col: 0, type: 'operator', value: '-', isStart: false, isEnd: false, isOnPath: false },
-        { row: 1, col: 1, type: 'number', value: 2, isStart: false, isEnd: false, isOnPath: false },
-        { row: 1, col: 2, type: 'operator', value: '+', isStart: false, isEnd: false, isOnPath: false },
-      ],
-      [
-        { row: 2, col: 0, type: 'number', value: 5, isStart: false, isEnd: false, isOnPath: false },
-        { row: 2, col: 1, type: 'operator', value: '+', isStart: false, isEnd: false, isOnPath: false },
-        { row: 2, col: 2, type: 'number', value: 3, isStart: false, isEnd: true, isOnPath: false },
-      ],
-    ]
-    return {
+    // Rotate through 3 verified fallback puzzles
+    const fallbackIndex = Math.floor(Math.random() * 3)
+    
+    let grid: GridCell[][]
+    let target: number
+    let solutionPath: PathStep[]
+    
+    if (fallbackIndex === 0) {
+      // Fallback 1: target 6 - path (0,0)→(0,1)→(0,2) = 4+2 = 6 ✓
+      grid = [
+        [
+          { row: 0, col: 0, type: 'number', value: 4, isStart: true, isEnd: false, isOnPath: true },
+          { row: 0, col: 1, type: 'operator', value: '+', isStart: false, isEnd: false, isOnPath: true },
+          { row: 0, col: 2, type: 'number', value: 2, isStart: false, isEnd: false, isOnPath: true },
+        ],
+        [
+          { row: 1, col: 0, type: 'operator', value: '*', isStart: false, isEnd: false, isOnPath: false },
+          { row: 1, col: 1, type: 'number', value: 3, isStart: false, isEnd: false, isOnPath: false },
+          { row: 1, col: 2, type: 'operator', value: '-', isStart: false, isEnd: false, isOnPath: false },
+        ],
+        [
+          { row: 2, col: 0, type: 'number', value: 1, isStart: false, isEnd: false, isOnPath: false },
+          { row: 2, col: 1, type: 'operator', value: '+', isStart: false, isEnd: false, isOnPath: false },
+          { row: 2, col: 2, type: 'number', value: 5, isStart: false, isEnd: true, isOnPath: true },
+        ],
+      ]
+      target = 6
+      solutionPath = [{ row: 0, col: 0 }, { row: 0, col: 1 }, { row: 0, col: 2 }]
+    } else if (fallbackIndex === 1) {
+      // Fallback 2: target 12 - path (0,0)→(0,1)→(0,2) = 3*4 = 12 ✓
+      grid = [
+        [
+          { row: 0, col: 0, type: 'number', value: 3, isStart: true, isEnd: false, isOnPath: true },
+          { row: 0, col: 1, type: 'operator', value: '*', isStart: false, isEnd: false, isOnPath: true },
+          { row: 0, col: 2, type: 'number', value: 4, isStart: false, isEnd: false, isOnPath: true },
+        ],
+        [
+          { row: 1, col: 0, type: 'operator', value: '+', isStart: false, isEnd: false, isOnPath: false },
+          { row: 1, col: 1, type: 'number', value: 2, isStart: false, isEnd: false, isOnPath: false },
+          { row: 1, col: 2, type: 'operator', value: '+', isStart: false, isEnd: false, isOnPath: false },
+        ],
+        [
+          { row: 2, col: 0, type: 'number', value: 1, isStart: false, isEnd: false, isOnPath: false },
+          { row: 2, col: 1, type: 'operator', value: '+', isStart: false, isEnd: false, isOnPath: false },
+          { row: 2, col: 2, type: 'number', value: 5, isStart: false, isEnd: true, isOnPath: true },
+        ],
+      ]
+      target = 12
+      solutionPath = [{ row: 0, col: 0 }, { row: 0, col: 1 }, { row: 0, col: 2 }]
+    } else {
+      // Fallback 3: target 8 - path (0,0)→(0,1)→(0,2) = 2*4 = 8 ✓
+      grid = [
+        [
+          { row: 0, col: 0, type: 'number', value: 2, isStart: true, isEnd: false, isOnPath: true },
+          { row: 0, col: 1, type: 'operator', value: '*', isStart: false, isEnd: false, isOnPath: true },
+          { row: 0, col: 2, type: 'number', value: 4, isStart: false, isEnd: false, isOnPath: true },
+        ],
+        [
+          { row: 1, col: 0, type: 'operator', value: '+', isStart: false, isEnd: false, isOnPath: false },
+          { row: 1, col: 1, type: 'number', value: 3, isStart: false, isEnd: false, isOnPath: false },
+          { row: 1, col: 2, type: 'operator', value: '-', isStart: false, isEnd: false, isOnPath: false },
+        ],
+        [
+          { row: 2, col: 0, type: 'number', value: 5, isStart: false, isEnd: false, isOnPath: false },
+          { row: 2, col: 1, type: 'operator', value: '+', isStart: false, isEnd: false, isOnPath: false },
+          { row: 2, col: 2, type: 'number', value: 1, isStart: false, isEnd: true, isOnPath: true },
+        ],
+      ]
+      target = 8
+      solutionPath = [{ row: 0, col: 0 }, { row: 0, col: 1 }, { row: 0, col: 2 }]
+    }
+    
+    deepFreezeGrid(grid)
+    return Object.freeze({
       gridSize: 3,
       grid,
-      target: 9,
+      target,
+      solutionPath,
+    })
+  } else if (gridSize === 4) {
+    // Fallback for 4×4 — verified solvable puzzle
+    // Solution path: (0,0) → (1,0) → (2,0) → (2,1) → (2,2) → (2,3) → (3,3)
+    // Expression: 4 + 3 = 7
+    const grid: GridCell[][] = [
+      [
+        { row: 0, col: 0, type: 'number', value: 4, isStart: true, isEnd: false, isOnPath: true },
+        { row: 0, col: 1, type: 'operator', value: '-', isStart: false, isEnd: false, isOnPath: false },
+        { row: 0, col: 2, type: 'number', value: 8, isStart: false, isEnd: false, isOnPath: false },
+        { row: 0, col: 3, type: 'operator', value: '*', isStart: false, isEnd: false, isOnPath: false },
+      ],
+      [
+        { row: 1, col: 0, type: 'operator', value: '+', isStart: false, isEnd: false, isOnPath: true },
+        { row: 1, col: 1, type: 'number', value: 2, isStart: false, isEnd: false, isOnPath: false },
+        { row: 1, col: 2, type: 'operator', value: '+', isStart: false, isEnd: false, isOnPath: false },
+        { row: 1, col: 3, type: 'number', value: 9, isStart: false, isEnd: false, isOnPath: false },
+      ],
+      [
+        { row: 2, col: 0, type: 'number', value: 3, isStart: false, isEnd: false, isOnPath: true },
+        { row: 2, col: 1, type: 'operator', value: '+', isStart: false, isEnd: false, isOnPath: true },
+        { row: 2, col: 2, type: 'number', value: 4, isStart: false, isEnd: false, isOnPath: true },
+        { row: 2, col: 3, type: 'operator', value: '-', isStart: false, isEnd: false, isOnPath: true },
+      ],
+      [
+        { row: 3, col: 0, type: 'operator', value: '/', isStart: false, isEnd: false, isOnPath: false },
+        { row: 3, col: 1, type: 'number', value: 5, isStart: false, isEnd: false, isOnPath: false },
+        { row: 3, col: 2, type: 'operator', value: '-', isStart: false, isEnd: false, isOnPath: false },
+        { row: 3, col: 3, type: 'number', value: 4, isStart: false, isEnd: true, isOnPath: true },
+      ],
+    ]
+
+    deepFreezeGrid(grid)
+    return Object.freeze({
+      gridSize: 4,
+      grid,
+      target: 7,
       solutionPath: [
         { row: 0, col: 0 },
-        { row: 0, col: 1 },
-        { row: 0, col: 2 },
+        { row: 1, col: 0 },
+        { row: 2, col: 0 },
+        { row: 2, col: 1 },
+        { row: 2, col: 2 },
+        { row: 2, col: 3 },
+        { row: 3, col: 3 },
       ],
-    }
+    })
   }
 
-  // Fallback for 4×4
-  const grid: GridCell[][] = Array(4)
-    .fill(null)
-    .map(() =>
-      Array(4)
-        .fill(null)
-        .map(() => ({ type: 'number' as CellType, value: 1 }))
-    )
-
-  for (let row = 0; row < 4; row++) {
-    for (let col = 0; col < 4; col++) {
-      const isNumber = (row + col) % 2 === 0
-      grid[row][col] = {
-        row,
-        col,
-        type: isNumber ? 'number' : 'operator',
-        value: isNumber ? Math.floor(Math.random() * 9) + 1 : ['+', '-'][Math.floor(Math.random() * 2)],
-        isStart: row === 0 && col === 0,
-        isEnd: row === 3 && col === 3,
-        isOnPath: false,
-      }
-    }
-  }
-
-  return {
-    gridSize: 4,
-    grid,
-    target: 8,
-    solutionPath: [{ row: 0, col: 0 }],
-  }
+  // Default fallback for unsupported grid sizes
+  throw new Error(`buildFallbackPuzzle: unsupported gridSize ${gridSize}`)
 }
 
-function createGridFromPath(path: PathStep[], gridSize: number): GridCell[][] {
-  const grid: GridCell[][] = Array(gridSize)
-    .fill(null)
-    .map(() =>
-      Array(gridSize)
-        .fill(null)
-        .map(() => ({ type: 'number' as CellType, value: 1 }))
-    )
 
-  const pathCellData = fillCellsForPath(path)
 
-  for (let i = 0; i < path.length; i++) {
-    const { row, col } = path[i]
-    const data = pathCellData[i]
-    grid[row][col] = {
-      row,
-      col,
-      type: data.type,
-      value: data.value,
-      isOnPath: true,
-      isStart: row === 0 && col === 0,
-      isEnd: row === gridSize - 1 && col === gridSize - 1,
-    }
-  }
-
-  for (let row = 0; row < gridSize; row++) {
-    for (let col = 0; col < gridSize; col++) {
-      if (grid[row][col].isOnPath) continue
-
-      const isNumber = (row + col) % 2 === 0
-      const value = isNumber ? Math.floor(Math.random() * 9) + 1 : ['+', '-', '*', '/'][Math.floor(Math.random() * 4)]
-
-      grid[row][col] = {
-        row,
-        col,
-        type: isNumber ? 'number' : 'operator',
-        value,
-        isOnPath: false,
-        isStart: false,
-        isEnd: false,
-      }
-    }
-  }
-
-  return grid
-}
-
-export function generatePuzzle(gridSize: number): MazePuzzle {
+export function generatePuzzle(gridSize: number, seed?: number): MazePuzzle {
   let attempts = 0
-  const MAX_ATTEMPTS = 200
+  const MAX_ATTEMPTS = 500
 
   while (attempts < MAX_ATTEMPTS) {
     attempts++
-    const puzzle = tryGeneratePuzzle(gridSize)
+    const puzzleSeed = seed !== undefined ? seed + attempts : undefined
+    const puzzle = tryBuildPuzzle(gridSize, puzzleSeed)
     if (puzzle !== null) return puzzle
   }
 
-  return getHardcodedFallback(gridSize)
+  return buildFallbackPuzzle(gridSize)
 }
 
-function generateFallbackPuzzle(gridSize: number): MazePuzzle {
-  const grid: GridCell[][] = Array(gridSize)
-    .fill(null)
-    .map(() =>
-      Array(gridSize)
-        .fill(null)
-        .map(() => ({ type: 'number' as CellType, value: 1 }))
-    )
-
-  for (let row = 0; row < gridSize; row++) {
-    for (let col = 0; col < gridSize; col++) {
-      const isNumber = (row + col) % 2 === 0
-      const value = isNumber ? Math.floor(Math.random() * 9) + 1 : ['+', '-', '*', '/'][Math.floor(Math.random() * 4)]
-
-      grid[row][col] = {
-        row,
-        col,
-        type: isNumber ? 'number' : 'operator',
-        value,
-        isOnPath: false,
-        isStart: row === 0 && col === 0,
-        isEnd: row === gridSize - 1 && col === gridSize - 1,
-      }
-    }
-  }
-
-  return {
-    gridSize,
-    grid,
-    target: 10,
-    solutionPath: [
-      { row: 0, col: 0 },
-      { row: 0, col: 1 },
-      { row: 0, col: 2 },
-    ],
-  }
-}
-
-export function evaluateExpression(grid: GridCell[][], path: PathStep[]): number {
-  if (path.length < 1) return NaN
-  if (path.length % 2 === 0) return NaN
-    // even length path ends on operator — invalid
-
-  const cells = path.map((step) => grid[step.row][step.col])
+function evaluatePathCells(cells: Array<{ type: CellType; value: number | MathOperator }>): number {
+  if (cells.length < 1) return NaN
+  if (cells.length % 2 === 0) return NaN // even length ends on operator — invalid
 
   const numberCells = cells.filter((c) => c.type === 'number')
   const operatorCells = cells.filter((c) => c.type === 'operator')
@@ -475,8 +495,7 @@ export function evaluateExpression(grid: GridCell[][], path: PathStep[]): number
         break
       case '/':
         if (num === 0) return NaN
-        if (result % num !== 0) return NaN
-          // division must produce whole number
+        if (result % num !== 0) return NaN // division must produce whole number
         result = result / num
         break
       default:
@@ -488,26 +507,31 @@ export function evaluateExpression(grid: GridCell[][], path: PathStep[]): number
   return Math.round(result * 10000) / 10000
 }
 
-export function isValidPath(path: PathStep[], gridSize: number): boolean {
-  if (path.length < 3) return false
-  if (path[0].row !== 0 || path[0].col !== 0) return false
-  if (path[path.length - 1].row !== gridSize - 1 || path[path.length - 1].col !== gridSize - 1) return false
+export function evaluateExpression(grid: GridCell[][], path: PathStep[], gridSize: number): number {
+  if (path.length < 3) return NaN
+  if (path[0].row !== 0 || path[0].col !== 0) return NaN
+  if (path[path.length - 1].row !== gridSize - 1 || path[path.length - 1].col !== gridSize - 1) return NaN
 
   const visited = new Set<string>()
+  const pathCells: Array<{ type: CellType; value: number | MathOperator }> = []
+
   for (let i = 0; i < path.length; i++) {
     const key = `${path[i].row},${path[i].col}`
-    if (visited.has(key)) return false
+    if (visited.has(key)) return NaN
     visited.add(key)
 
     if (i > 0) {
       const prev = path[i - 1]
       const curr = path[i]
       const distance = Math.abs(prev.row - curr.row) + Math.abs(prev.col - curr.col)
-      if (distance !== 1) return false
+      if (distance !== 1) return NaN
     }
+
+    const cell = grid[path[i].row][path[i].col]
+    pathCells.push({ type: cell.type, value: cell.value })
   }
 
-  return true
+  return evaluatePathCells(pathCells)
 }
 
 export function isAdjacentTo(a: PathStep, b: PathStep): boolean {

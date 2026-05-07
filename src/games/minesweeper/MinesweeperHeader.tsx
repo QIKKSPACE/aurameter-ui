@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { MinesweeperGameState } from './MinesweeperTypes';
 import { MINESWEEPER_COLORS } from './MinesweeperColors';
 
@@ -7,12 +8,16 @@ type Props = {
   gameState: MinesweeperGameState;
   elapsedSeconds: number;
   onRestart: () => void;
+  onInfoPress: () => void;
+  onGoBack?: () => void;
 };
 
 export default function MinesweeperHeader({
   gameState,
   elapsedSeconds,
   onRestart,
+  onInfoPress,
+  onGoBack,
 }: Props) {
   const styles = useMemo(
     () =>
@@ -58,6 +63,22 @@ export default function MinesweeperHeader({
         restartText: {
           fontSize: 24,
         },
+        infoButton: {
+          width: 36,
+          height: 36,
+          borderRadius: 18,
+          backgroundColor: '#2A2A2A',
+          borderWidth: 1,
+          borderColor: 'rgba(79,195,247,0.4)',
+          justifyContent: 'center',
+          alignItems: 'center',
+        },
+        infoText: {
+          fontSize: 16,
+          fontWeight: '700',
+          color: '#4FC3F7',
+          fontStyle: 'italic',
+        },
       }),
     []
   );
@@ -79,18 +100,45 @@ export default function MinesweeperHeader({
 
   return (
     <View style={styles.headerContainer}>
-      <View style={styles.pill}>
-        <Text style={styles.mineIcon}>💣</Text>
-        <Text style={styles.pillText}>{formatNumber(Math.max(0, gameState.minesRemaining))}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        {onGoBack && (
+          <TouchableOpacity
+            onPress={onGoBack}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 10,
+              backgroundColor: '#2A2A2A',
+              borderWidth: 1,
+              borderColor: 'rgba(79,195,247,0.3)',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <Icon name="arrow-left" size={20} color="#4FC3F7" />
+          </TouchableOpacity>
+        )}
+        <View style={styles.pill}>
+          <Text style={styles.mineIcon}>💣</Text>
+          <Text style={styles.pillText}>{formatNumber(Math.max(0, gameState.minesRemaining))}</Text>
+        </View>
       </View>
 
       <TouchableOpacity style={styles.restartButton} onPress={onRestart} activeOpacity={0.7}>
         <Text style={styles.restartText}>{getSmiley()}</Text>
       </TouchableOpacity>
 
-      <View style={styles.pill}>
-        <Text style={{ fontSize: 14, color: MINESWEEPER_COLORS.TEXT_COLOR }}>⏱️</Text>
-        <Text style={styles.pillText}>{formatNumber(elapsedSeconds)}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <View style={styles.pill}>
+          <Text style={{ fontSize: 14, color: MINESWEEPER_COLORS.TEXT_COLOR }}>⏱️</Text>
+          <Text style={styles.pillText}>{formatNumber(elapsedSeconds)}</Text>
+        </View>
+
+        <TouchableOpacity style={styles.infoButton} onPress={onInfoPress} activeOpacity={0.7}>
+          <Text style={styles.infoText}>i</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );

@@ -62,9 +62,12 @@ const MathMazeCell = memo(
     )
   },
   (prevProps, nextProps) => {
+    // CRITICAL: Check cell.value and cell.type to catch mutations
     return (
       prevProps.cell.row === nextProps.cell.row &&
       prevProps.cell.col === nextProps.cell.col &&
+      prevProps.cell.value === nextProps.cell.value &&
+      prevProps.cell.type === nextProps.cell.type &&
       prevProps.isOnCurrentPath === nextProps.isOnCurrentPath &&
       prevProps.isWrong === nextProps.isWrong &&
       prevProps.cellSize === nextProps.cellSize

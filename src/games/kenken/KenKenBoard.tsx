@@ -11,9 +11,11 @@ type Props = {
   selectedCell: { row: number; col: number } | null;
   onCellPress: (row: number, col: number) => void;
   screenWidth: number;
+  highlightedCells?: { row: number; col: number }[];
+  hintCellFlash?: { row: number; col: number } | null;
 };
 
-const KenKenBoardComponent = ({ level, grid, selectedCell, onCellPress, screenWidth }: Props) => {
+const KenKenBoardComponent = ({ level, grid, selectedCell, onCellPress, screenWidth, highlightedCells = [], hintCellFlash = null }: Props) => {
   const GRID_WIDTH = screenWidth - KENKEN_SIZING.GRID_PADDING * 2;
   const cellSize = GRID_WIDTH / level.gridSize;
 
@@ -78,6 +80,11 @@ const KenKenBoardComponent = ({ level, grid, selectedCell, onCellPress, screenWi
             const cageLabel = cageLabelMap.get(cellKey) || '';
             const isSelected =
               selectedCell && selectedCell.row === rowIndex && selectedCell.col === colIndex;
+            const isHighlighted = highlightedCells.some(
+              (c) => c.row === rowIndex && c.col === colIndex
+            );
+            const isFlashing =
+              hintCellFlash && hintCellFlash.row === rowIndex && hintCellFlash.col === colIndex;
 
             return (
               <KenKenCell
@@ -91,6 +98,8 @@ const KenKenBoardComponent = ({ level, grid, selectedCell, onCellPress, screenWi
                 cageLabel={cageLabel}
                 onPress={onCellPress}
                 digitFontSize={digitFontSize}
+                isHighlighted={isHighlighted}
+                isFlashing={isFlashing}
               />
             );
           })}

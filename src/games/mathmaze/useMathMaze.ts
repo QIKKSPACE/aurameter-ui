@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import type { MathMazeGameState, PathStep, PathStatus } from './MathMazeTypes'
+import type { MathMazeGameState, PathStep, PathStatus, MazePuzzle } from './MathMazeTypes'
 import {
   generatePuzzle,
   evaluateExpression,
@@ -11,20 +11,26 @@ import {
 const INITIAL_TIME_REMAINING = 120
 const HIGH_SCORE_KEY = '@aurameter/mathmaze-highscore'
 
+function createInitialGameState(): MathMazeGameState {
+  return {
+    puzzle: null,
+    currentPath: [{ row: 0, col: 0 }],
+    pathStatus: 'idle',
+    currentResult: null,
+    playerScore: 0,
+    timeRemaining: INITIAL_TIME_REMAINING,
+    roundsCompleted: 0,
+    isGameOver: false,
+  }
+}
+
 export function useMathMaze(gridSize: number = 3) {
-  const [gameState, setGameState] = useState<MathMazeGameState>(() => {
-    const puzzle = generatePuzzle(gridSize)
-    return {
-      puzzle,
-      currentPath: [{ row: 0, col: 0 }],
-      pathStatus: 'idle',
-      currentResult: null,
-      playerScore: 0,
-      timeRemaining: INITIAL_TIME_REMAINING,
-      roundsCompleted: 0,
-      isGameOver: false,
-    }
-  })
+  // CRITICAL: Stable puzzle ref that NEVER changes during level play
+  // This ref is checked with === so the same object reference is always returned
+  const stablePuzzleRef = useRef<MazePuzzle | null>(null)
+
+  // Initialize gameState with default values to prevent null crashes on first render
+  const [gameState, setGameState] = useState<MathMazeGameState>(() => createInitialGameState())
 
   const [isDragging, setIsDragging] = useState(false)
   const [highScore, setHighScore] = useState(0)
@@ -48,26 +54,35 @@ export function useMathMaze(gridSize: number = 3) {
 
   const handleCellDragStart = useCallback(
     (row: number, col: number) => {
+      if (!gameState) return
       if (gameState.isGameOver) return
       if (gameState.pathStatus === 'wrong') return
 
       if (row === 0 && col === 0) {
         setIsDragging(true)
-        setGameState((prev) => ({
-          ...prev,
-          currentPath: [{ row: 0, col: 0 }],
-          pathStatus: 'drawing',
-          currentResult: null,
-        }))
+        setGameState((prev) => {
+          return {
+            ...prev,
+            currentPath: [{ row: 0, col: 0 }],
+            pathStatus: 'drawing',
+            currentResult: null,
+          }
+        })
       }
     },
-    [gameState.isGameOver, gameState.pathStatus]
+    [gameState?.isGameOver, gameState?.pathStatus]
   )
 
   const handleCellDragEnter = useCallback(
     (row: number, col: number) => {
       if (!isDragging) return
+      if (!gameState) return
       if (gameState.pathStatus === 'wrong') return
+
+      // CRITICAL: Always use stablePuzzleRef.current to ensure we're reading from
+      // the SAME puzzle object that was set at the start of this level
+      const puzzle = stablePuzzleRef.current
+      if (!puzzle) return
 
       setGameState((prev) => {
         if (prev.currentPath.length === 0) return prev
@@ -82,7 +97,7 @@ export function useMathMaze(gridSize: number = 3) {
         if (isBacktrack(prev.currentPath, newCell)) {
           const newPath = prev.currentPath.slice(0, -1)
           const newResult = newPath.length > 1
-            ? evaluateExpression(prev.puzzle.grid, newPath)
+            ? evaluateExpression(puzzle.grid, newPath, puzzle.gridSize)
             : null
           return {
             ...prev,
@@ -91,9 +106,9 @@ export function useMathMaze(gridSize: number = 3) {
           }
         }
 
-        if (canExtendPath(prev.currentPath, newCell, prev.puzzle.gridSize)) {
+        if (canExtendPath(prev.currentPath, newCell, puzzle.gridSize)) {
           const newPath = [...prev.currentPath, newCell]
-          const newResult = evaluateExpression(prev.puzzle.grid, newPath)
+          const newResult = evaluateExpression(puzzle.grid, newPath, puzzle.gridSize)
           return {
             ...prev,
             currentPath: newPath,
@@ -104,19 +119,22 @@ export function useMathMaze(gridSize: number = 3) {
         return prev
       })
     },
-    [isDragging, gameState.pathStatus]
+    [isDragging, gameState?.pathStatus]
   )
 
   const handleDragEnd = useCallback(() => {
     setIsDragging(false)
+
+    const puzzle = stablePuzzleRef.current
+    if (!puzzle) return
 
     setGameState((prev) => {
       if (prev.currentPath.length === 0) return prev
 
       // Guard: only evaluate when path ends at END cell
       const lastCell = prev.currentPath[prev.currentPath.length - 1]
-      const endRow = prev.puzzle.gridSize - 1
-      const endCol = prev.puzzle.gridSize - 1
+      const endRow = puzzle.gridSize - 1
+      const endCol = puzzle.gridSize - 1
 
       if (lastCell.row !== endRow || lastCell.col !== endCol) {
         return {
@@ -126,8 +144,8 @@ export function useMathMaze(gridSize: number = 3) {
         }
       }
 
-      const result = evaluateExpression(prev.puzzle.grid, prev.currentPath)
-      const target = prev.puzzle.target
+      const result = evaluateExpression(puzzle.grid, prev.currentPath, puzzle.gridSize)
+      const target = puzzle.target
 
       // Tolerance-based comparison for floating point accuracy
       const isCorrect =
@@ -151,124 +169,33 @@ export function useMathMaze(gridSize: number = 3) {
     })
   }, [])
 
-  const handleUndo = useCallback(() => {
+  const handleClear = useCallback(() => {
     setGameState((prev) => {
-      if (prev.currentPath.length <= 1) return prev
-
-      const newPath = prev.currentPath.slice(0, -1)
-      const newResult = newPath.length > 1
-        ? evaluateExpression(prev.puzzle.grid, newPath)
-        : null
-
       return {
         ...prev,
-        currentPath: newPath,
-        currentResult: newResult,
-        pathStatus: 'drawing',
+        currentPath: [{ row: 0, col: 0 }],
+        pathStatus: 'idle',
+        currentResult: null,
       }
     })
   }, [])
 
-  const handleClear = useCallback(() => {
-    setGameState((prev) => ({
-      ...prev,
-      currentPath: [{ row: 0, col: 0 }],
-      pathStatus: 'idle',
-      currentResult: null,
-    }))
+  const stopTimer = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current)
+      timerRef.current = null
+    }
   }, [])
 
-  const handleRedo = useCallback(() => {
-  }, [])
-
-  const handleNextRound = useCallback(() => {
-    const newGridSize = gameState.puzzle.gridSize
-    const newPuzzle = generatePuzzle(newGridSize)
-
-    setGameState((prev) => ({
-      ...prev,
-      puzzle: newPuzzle,
-      currentPath: [{ row: 0, col: 0 }],
-      pathStatus: 'idle',
-      currentResult: null,
-    }))
-  }, [gameState.puzzle.gridSize])
-
-  const startNewGame = useCallback((newGridSize?: number) => {
-    const size = newGridSize ?? gridSize
-    const puzzle = generatePuzzle(size)
-
-    setGameState({
-      puzzle,
-      currentPath: [{ row: 0, col: 0 }],
-      pathStatus: 'idle',
-      currentResult: null,
-      playerScore: 0,
-      timeRemaining: INITIAL_TIME_REMAINING,
-      roundsCompleted: 0,
-      isGameOver: false,
-    })
-
-    setIsDragging(false)
-  }, [gridSize])
-
-  const handleRestart = useCallback(async () => {
-    const newPuzzle = generatePuzzle(3)
-
-    setGameState({
-      puzzle: newPuzzle,
-      currentPath: [{ row: 0, col: 0 }],
-      pathStatus: 'idle',
-      currentResult: null,
-      playerScore: 0,
-      timeRemaining: INITIAL_TIME_REMAINING,
-      roundsCompleted: 0,
-      isGameOver: false,
-    })
-
-    setIsDragging(false)
-  }, [])
-
-  useEffect(() => {
-    loadHighScore().then(setHighScore)
-    startNewGame()
-  }, [loadHighScore, startNewGame])
-
-  useEffect(() => {
-    if (gameState.pathStatus === 'correct') {
-      const timer = setTimeout(() => {
-        handleNextRound()
-      }, 800)
-      return () => clearTimeout(timer)
-    }
-  }, [gameState.pathStatus, handleNextRound])
-
-  useEffect(() => {
-    if (gameState.pathStatus === 'wrong') {
-      const timer = setTimeout(() => {
-        setGameState((prev) => ({
-          ...prev,
-          currentPath: [{ row: 0, col: 0 }],
-          pathStatus: 'idle',
-          currentResult: null,
-        }))
-      }, 1200)
-      return () => clearTimeout(timer)
-    }
-  }, [gameState.pathStatus])
-
-  useEffect(() => {
-    if (gameState.isGameOver) {
-      if (timerRef.current) {
-        clearInterval(timerRef.current)
-        timerRef.current = null
-      }
-      return
-    }
-
+  const startCountdown = useCallback(() => {
+    if (timerRef.current) return
     timerRef.current = setInterval(() => {
       setGameState((prev) => {
         if (prev.timeRemaining <= 1) {
+          if (timerRef.current) {
+            clearInterval(timerRef.current)
+            timerRef.current = null
+          }
           return {
             ...prev,
             timeRemaining: 0,
@@ -281,13 +208,119 @@ export function useMathMaze(gridSize: number = 3) {
         }
       })
     }, 1000)
+  }, [])
 
+  useEffect(() => {
     return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current)
-      }
+      stopTimer()
     }
-  }, [gameState.isGameOver])
+  }, [stopTimer])
+
+  const handleNextRound = useCallback(() => {
+    if (!gameState || !stablePuzzleRef.current) return
+    const newGridSize = stablePuzzleRef.current.gridSize
+    
+    // Generate new puzzle with seeded random for determinism
+    const newSeed = Math.floor(Math.random() * 999999)
+    const newPuzzle = generatePuzzle(newGridSize, newSeed)
+    
+    // CRITICAL: Update BOTH ref and state with new puzzle
+    stablePuzzleRef.current = newPuzzle
+    setGameState((prev) => {
+      return {
+        ...prev,
+        puzzle: newPuzzle,
+        currentPath: [{ row: 0, col: 0 }],
+        pathStatus: 'idle',
+        currentResult: null,
+      }
+    })
+  }, [])
+
+  const startNewGame = useCallback((newGridSize?: number) => {
+    const size = newGridSize ?? gridSize
+    // Generate puzzle with seeded random for determinism
+    const newSeed = Math.floor(Math.random() * 999999)
+    const puzzle = generatePuzzle(size, newSeed)
+    
+    // CRITICAL: Store in stable ref that won't change for this level
+    stablePuzzleRef.current = puzzle
+
+    stopTimer()
+    startCountdown()
+    setGameState({
+      puzzle,
+      currentPath: [{ row: 0, col: 0 }],
+      pathStatus: 'idle',
+      currentResult: null,
+      playerScore: 0,
+      timeRemaining: INITIAL_TIME_REMAINING,
+      roundsCompleted: 0,
+      isGameOver: false,
+    })
+
+    setIsDragging(false)
+  }, [gridSize, stopTimer, startCountdown])
+
+  const handleRestart = useCallback(async () => {
+    // Generate new restart puzzle with seeded random
+    const newSeed = Math.floor(Math.random() * 999999)
+    const newPuzzle = generatePuzzle(3, newSeed)
+    
+    // CRITICAL: Store in stable ref for this new game session
+    stablePuzzleRef.current = newPuzzle
+
+    stopTimer()
+    startCountdown()
+    setGameState({
+      puzzle: newPuzzle,
+      currentPath: [{ row: 0, col: 0 }],
+      pathStatus: 'idle',
+      currentResult: null,
+      playerScore: 0,
+      timeRemaining: INITIAL_TIME_REMAINING,
+      roundsCompleted: 0,
+      isGameOver: false,
+    })
+
+    setIsDragging(false)
+  }, [stopTimer, startCountdown])
+
+  // CRITICAL: Initialize game on mount only - with empty deps
+  useEffect(() => {
+    const initGame = async () => {
+      const highScoreLoaded = await loadHighScore()
+      setHighScore(highScoreLoaded)
+      startNewGame()
+    }
+    initGame()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    if (!gameState || gameState.pathStatus !== 'correct') return
+    
+    const timer = setTimeout(() => {
+      handleNextRound()
+    }, 800)
+    return () => clearTimeout(timer)
+  }, [gameState?.pathStatus])
+
+  useEffect(() => {
+    if (!gameState || gameState.pathStatus !== 'wrong') return
+    
+    const timer = setTimeout(() => {
+      setGameState((prev) => {
+        return {
+          ...prev,
+          currentPath: [{ row: 0, col: 0 }],
+          pathStatus: 'idle',
+          currentResult: null,
+        }
+      })
+    }, 1200)
+    return () => clearTimeout(timer)
+  }, [gameState?.pathStatus])
 
   // Update high score when player score increases
   useEffect(() => {
@@ -295,7 +328,7 @@ export function useMathMaze(gridSize: number = 3) {
       setHighScore(gameState.playerScore)
       saveHighScore(gameState.playerScore)
     }
-  }, [gameState.playerScore, highScore, saveHighScore])
+  }, [gameState?.playerScore, highScore, saveHighScore])
 
   // Check high score when game ends
   useEffect(() => {
@@ -303,7 +336,7 @@ export function useMathMaze(gridSize: number = 3) {
       setHighScore(gameState.playerScore)
       saveHighScore(gameState.playerScore)
     }
-  }, [gameState.isGameOver, gameState.playerScore, highScore, saveHighScore])
+  }, [gameState?.isGameOver, gameState?.playerScore, highScore, saveHighScore])
 
   return {
     gameState,
@@ -311,9 +344,7 @@ export function useMathMaze(gridSize: number = 3) {
     handleCellDragStart,
     handleCellDragEnter,
     handleDragEnd,
-    handleUndo,
     handleClear,
-    handleRedo,
     handleNextRound,
     startNewGame,
     handleRestart,

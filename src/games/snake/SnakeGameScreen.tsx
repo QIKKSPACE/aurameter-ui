@@ -1,14 +1,14 @@
-import React, { useMemo } from "react";
-import { TouchableOpacity, View, useWindowDimensions, Modal } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import React, { useMemo, useCallback, useState, useRef, useEffect } from "react";
+import { TouchableOpacity, View, Modal, PanResponder, StatusBar, useWindowDimensions } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
-import ScreenBackground from "../../components/ScreenBackground";
 import AppText from "../../components/AppText";
 import { useTheme } from "../../constants/context/ThemeContext";
 import SnakeBoard from "./SnakeBoard";
 import SnakeControls from "./SnakeControls";
 import { createSnakeStyles } from "./SnakeStyles";
 import { snakeChallenge } from "./SnakeTypes";
+import type { Direction } from "./SnakeTypes";
 import { useSnakeGame } from "./useSnakeGame";
 import { GAME_CONFIG } from "./GameConfig";
 import { DIFFICULTY_TIERS } from "./DifficultyConfig";
@@ -25,19 +25,33 @@ export { submitSnakeScore } from "./useSnakeGame";
 export default function SnakeGameScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
-  const { width, height } = useWindowDimensions();
-  const [isNavigating, setIsNavigating] = React.useState(false); // ✅ Prevent double-tap back
-  
-  const boardSize = useMemo(() => {
-    const HEADER_HEIGHT = 160; // header + score display + tier
-    const CONTROLS_HEIGHT = 280; // d-pad + margins
-    const SAFE_BOTTOM = insets.bottom;
-    const availableHeight = height - HEADER_HEIGHT - CONTROLS_HEIGHT - SAFE_BOTTOM - 32;
-    const maxByWidth = width - GAME_CONFIG.CONTAINER_PADDING_HORIZONTAL * 2;
-    const maxByHeight = availableHeight;
-    return Math.min(maxByWidth, maxByHeight, 360);
-  }, [width, height, insets.bottom]);
-  const styles = useMemo(() => createSnakeStyles(theme, boardSize), [boardSize, theme]);
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+
+  // Fixed heights for each section (in dp)
+  const HEADER_HEIGHT = 52;
+  const STATS_HEIGHT = 44;
+  const DIFFICULTY_HEIGHT = 28;
+  const BOOST_HEIGHT = 52;
+  const PADDING = 8;
+
+  // Pre-calculate initial board size to avoid flicker on first render
+  const initialBoardSize = Math.max(
+    Math.floor(
+      Math.min(
+        screenWidth,
+        screenHeight
+          - (insets.top + insets.bottom)
+          - HEADER_HEIGHT
+          - STATS_HEIGHT
+          - DIFFICULTY_HEIGHT
+          - BOOST_HEIGHT
+      ) - PADDING * 2
+    ),
+    0
+  );
+
+  const [boardContainerSize, setBoardContainerSize] = useState(initialBoardSize);
+
   const {
     collisionToken,
     countdownText,
@@ -52,7 +66,6 @@ export default function SnakeGameScreen({ navigation }: Props) {
     lastEatenPosition,
     multiplier,
     obstacles,
-    progressToNextSpeed,
     restartGame,
     resumeGame,
     score,
@@ -60,136 +73,291 @@ export default function SnakeGameScreen({ navigation }: Props) {
     shieldCharges,
     snake,
     speedMultiplier,
-    streak,
     togglePause,
   } = useSnakeGame();
 
+  const styles = useMemo(() => createSnakeStyles(theme, boardContainerSize), [boardContainerSize, theme]);
+
+  // ═══════════════════════════════════════════════════════════
+  // GESTURE SYSTEM — attached to OUTERMOST View
+  // This is the PRIMARY gesture handler at screen level
+  // Refs for always-current handler functions
+  // ═══════════════════════════════════════════════════════════
+  const gestureStartRef = useRef({ x: 0, y: 0 });
+  const [isNavigating, setIsNavigating] = useState(false);
+  const setDirectionRef = useRef(setDirection);
+  const handleBoostRef = useRef(handleMultipleTaps);
+  
+  // Update refs on every render to always have latest functions
+  setDirectionRef.current = setDirection;
+  handleBoostRef.current = handleMultipleTaps;
+
+  const panResponderRef = useRef<any>(null);
+  if (panResponderRef.current === null) {
+    panResponderRef.current = PanResponder.create({
+      // Do NOT claim initial touch — let header buttons respond to taps
+      onStartShouldSetPanResponder: () => false,
+      // Claim on ANY movement — swipes always reach us before children
+      onMoveShouldSetPanResponder: () => true,
+      onShouldBlockNativeResponder: () => true,
+      // Do NOT release the touch to anything else
+      onPanResponderTerminationRequest: () => false,
+
+      onPanResponderGrant: (evt) => {
+        gestureStartRef.current = {
+          x: evt.nativeEvent.pageX,
+          y: evt.nativeEvent.pageY,
+        };
+      },
+
+      onPanResponderRelease: (_, gs) => {
+        const absX = Math.abs(gs.dx);
+        const absY = Math.abs(gs.dy);
+
+        // Swipe direction (boost is handled by TouchableOpacity, not here)
+        if (absX >= absY) {
+          setDirectionRef.current(gs.dx > 0 ? "RIGHT" : "LEFT");
+        } else {
+          setDirectionRef.current(gs.dy > 0 ? "DOWN" : "UP");
+        }
+      },
+
+      onPanResponderTerminate: (_, gs) => {
+        // Handle even if terminated
+        const absX = Math.abs(gs.dx);
+        const absY = Math.abs(gs.dy);
+        if (absX >= absY) {
+          setDirectionRef.current(gs.dx > 0 ? "RIGHT" : "LEFT");
+        } else {
+          setDirectionRef.current(gs.dy > 0 ? "DOWN" : "UP");
+        }
+      },
+    });
+  }
+
   const handleGoBack = () => {
-    if (isNavigating) return; // ✅ CRITICAL: Prevent rapid back-button taps
+    if (isNavigating) return;
     setIsNavigating(true);
     navigation.goBack();
   };
 
   return (
-    <ScreenBackground>
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background.color }]}>
-        <View style={[styles.container, { paddingVertical: 6 }]}>
-          {/* Minimal Header */}
-          <View style={[styles.headerRow, { marginBottom: 8 }]}>
-            <TouchableOpacity style={[styles.closeButton, { width: 32, height: 32 }]} onPress={handleGoBack}>
+    // OUTERMOST VIEW — has panHandlers
+    // This is the FIRST view in the component tree
+    <View
+      style={{ flex: 1, backgroundColor: theme.background.color }}
+      {...panResponderRef.current.panHandlers}
+    >
+      <StatusBar barStyle="light-content" backgroundColor={theme.background.color} />
+
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: theme.background.color,
+          paddingTop: insets.top,
+          paddingBottom: insets.bottom,
+          paddingLeft: insets.left,
+          paddingRight: insets.right,
+        }}
+      >
+        {/* HEADER */}
+          <View
+            style={{
+              height: HEADER_HEIGHT,
+              paddingHorizontal: PADDING,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <TouchableOpacity
+              onPress={handleGoBack}
+              style={{ width: 32, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: theme.components.card, borderWidth: 1, borderColor: theme.components.border }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
               <Icon name="arrow-left" size={20} color={theme.text.primary} />
             </TouchableOpacity>
 
-            <View style={{ alignItems: "center", flex: 1 }}>
-              <AppText variant="h4" style={{ fontSize: 18 }}>{snakeChallenge.title}</AppText>
-            </View>
+            <AppText variant="h4" style={{ fontSize: 18 }}>
+              {snakeChallenge.title}
+            </AppText>
 
-            <TouchableOpacity style={[styles.closeButton, { width: 32, height: 32 }]} onPress={isPaused ? resumeGame : togglePause}>
-              <Icon
-                name={isPaused ? "play" : "pause"}
-                size={18}
-                color={theme.text.primary}
-              />
+            <TouchableOpacity
+              onPress={isPaused ? resumeGame : togglePause}
+              style={{ width: 32, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: theme.components.card, borderWidth: 1, borderColor: theme.components.border }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Icon name={isPaused ? "play" : "pause"} size={18} color={theme.text.primary} />
             </TouchableOpacity>
           </View>
 
-          {/* Compact Score Display */}
-          <View style={{ marginBottom: 10, paddingHorizontal: 12 }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <View>
-                <AppText variant="caption" style={{ color: theme.text.secondary, fontSize: 12 }}>Score</AppText>
-                <AppText variant="h4" style={{ fontSize: 20, color: "#F5F5DC" }}>{score}</AppText>
-              </View>
-              <View style={{ alignItems: "center" }}>
-                <AppText variant="caption" style={{ color: theme.text.secondary, fontSize: 12 }}>High</AppText>
-                <AppText variant="h4" style={{ fontSize: 18, color: theme.text.secondary }}>{highScore}</AppText>
-              </View>
-              <View style={{ alignItems: "center" }}>
-                <AppText variant="caption" style={{ color: theme.text.secondary, fontSize: 12 }}>x{multiplier}</AppText>
-              </View>
-              <View style={{ alignItems: "center" }}>
-                <AppText variant="caption" style={{ color: theme.text.secondary, fontSize: 12 }}>🛡️</AppText>
-                <AppText variant="body" style={{ fontSize: 16, color: theme.text.primary }}>{shieldCharges}</AppText>
-              </View>
-              <View style={{ alignItems: "center", paddingRight: 4 }}>
-                <AppText variant="caption" style={{ color: theme.text.secondary, fontSize: 12 }}>Speed</AppText>
-                <AppText variant="body" style={{ fontSize: 16, color: "#F5F5DC", fontWeight: "bold" }}>{speedMultiplier}x</AppText>
-              </View>
+          {/* STATS ROW */}
+          <View
+            style={{
+              height: STATS_HEIGHT,
+              paddingHorizontal: PADDING,
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <View>
+              <AppText variant="caption" style={{ color: theme.text.secondary, fontSize: 11 }}>
+                Score
+              </AppText>
+              <AppText variant="h4" style={{ fontSize: 16, color: "#F5F5DC" }}>
+                {score}
+              </AppText>
+            </View>
+            <View>
+              <AppText variant="caption" style={{ color: theme.text.secondary, fontSize: 11 }}>
+                High
+              </AppText>
+              <AppText variant="h4" style={{ fontSize: 14, color: theme.text.secondary }}>
+                {highScore}
+              </AppText>
+            </View>
+            <View style={{ alignItems: "center" }}>
+              <AppText variant="caption" style={{ color: theme.text.secondary, fontSize: 11 }}>
+                x{multiplier}
+              </AppText>
+            </View>
+            <View style={{ alignItems: "center" }}>
+              <AppText variant="caption" style={{ color: theme.text.secondary, fontSize: 11 }}>
+                🛡️
+              </AppText>
+              <AppText variant="body" style={{ fontSize: 14, color: theme.text.primary }}>
+                {shieldCharges}
+              </AppText>
+            </View>
+            <View style={{ alignItems: "center", paddingRight: 4 }}>
+              <AppText variant="caption" style={{ color: theme.text.secondary, fontSize: 11 }}>
+                Speed
+              </AppText>
+              <AppText variant="body" style={{ fontSize: 14, color: "#F5F5DC", fontWeight: "bold" }}>
+                {speedMultiplier}x
+              </AppText>
             </View>
           </View>
 
-          {/* Difficulty Tier Display */}
-          <View style={{ marginBottom: 8, paddingHorizontal: 12, alignItems: "center" }}>
-            <AppText variant="caption" style={{ color: theme.text.secondary, fontSize: 14, fontWeight: "bold" }}>
+          {/* DIFFICULTY LABEL */}
+          <View
+            style={{
+              height: DIFFICULTY_HEIGHT,
+              paddingHorizontal: PADDING,
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            <AppText variant="caption" style={{ color: theme.text.secondary, fontSize: 13, fontWeight: "bold" }}>
               {currentTier.toUpperCase()}
             </AppText>
           </View>
 
-          {/* Game Board */}
-          <SnakeBoard
-            snake={snake}
-            food={food}
-            obstacles={obstacles}
-            boardSize={boardSize - GAME_CONFIG.BOARD_PADDING * 2}
-            gridSize={gridSize}
-            countdownText={countdownText}
-            isPaused={isPaused}
-            foodPulseToken={foodPulseToken}
-            collisionToken={collisionToken}
-            lastEatenPosition={lastEatenPosition}
-            theme={theme}
-            styles={styles}
-          />
-
-          {/* Controls */}
-          <View style={{ paddingBottom: Math.max(insets.bottom, 16) }}>
-            <SnakeControls 
-              onDirectionChange={setDirection} 
-              onSpeedBoost={handleMultipleTaps}
-              styles={styles} 
-              theme={theme} 
-            />
+          {/* BOARD AREA — flex:1, pointerEvents="box-none" */}
+          {/* The board PASSES all touches to parent PanResponder */}
+          <View
+            style={{ flex: 1, padding: PADDING, alignItems: "center", justifyContent: "center" }}
+            pointerEvents="box-none"
+            onLayout={(event) => {
+              const { width, height } = event.nativeEvent.layout;
+              const size = Math.floor(Math.min(width, height) - PADDING * 2);
+              if (size > 0 && size !== boardContainerSize) {
+                setBoardContainerSize(size);
+              }
+            }}
+          >
+            {boardContainerSize > 0 && (
+              <SnakeBoard
+                boardSize={boardContainerSize}
+                snake={snake}
+                food={food}
+                obstacles={obstacles}
+                gridSize={gridSize}
+                countdownText={countdownText}
+                isPaused={isPaused}
+                foodPulseToken={foodPulseToken}
+                collisionToken={collisionToken}
+                lastEatenPosition={lastEatenPosition}
+                theme={theme}
+                styles={styles}
+              />
+            )}
           </View>
-        </View>
-      </SafeAreaView>
+
+          {/* BOOST BUTTON */}
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => handleBoostRef.current()}
+            style={{
+              height: BOOST_HEIGHT,
+              alignItems: "center",
+              justifyContent: "center",
+              paddingHorizontal: PADDING,
+              width: "100%",
+            }}
+          >
+            <SnakeControls onSpeedBoost={handleMultipleTaps} styles={styles} theme={theme} />
+          </TouchableOpacity>
+      </View>
 
       {/* Game Over Modal */}
       <Modal visible={gameOver} transparent animationType="fade">
-        <View style={{
-          flex: 1,
-          backgroundColor: "rgba(0, 0, 0, 0.7)",
-          justifyContent: "center",
-          alignItems: "center",
-        }}>
-          <View style={{
-            backgroundColor: theme.background.color,
-            borderRadius: 16,
-            padding: 24,
-            width: "80%",
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0, 0, 0, 0.7)",
+            justifyContent: "center",
             alignItems: "center",
-            borderWidth: 2,
-            borderColor: "#F5F5DC",
-          }}>
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: theme.background.color,
+              borderRadius: 16,
+              padding: 24,
+              width: "80%",
+              alignItems: "center",
+              borderWidth: 2,
+              borderColor: "#F5F5DC",
+            }}
+          >
             <AppText variant="h2" style={{ fontSize: 32, marginBottom: 16, color: theme.text.primary }}>
               Game Over
             </AppText>
 
             <View style={{ width: "100%", marginBottom: 20 }}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 12 }}>
-                <AppText variant="body" style={{ fontSize: 16, color: theme.text.secondary }}>Final Score:</AppText>
-                <AppText variant="body" style={{ fontSize: 20, fontWeight: "bold", color: "#F5F5DC" }}>{score}</AppText>
+                <AppText variant="body" style={{ fontSize: 16, color: theme.text.secondary }}>
+                  Final Score:
+                </AppText>
+                <AppText variant="body" style={{ fontSize: 20, fontWeight: "bold", color: "#F5F5DC" }}>
+                  {score}
+                </AppText>
               </View>
               <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 12 }}>
-                <AppText variant="body" style={{ fontSize: 16, color: theme.text.secondary }}>High Score:</AppText>
-                <AppText variant="body" style={{ fontSize: 20, fontWeight: "bold", color: "#F5F5DC" }}>{highScore}</AppText>
+                <AppText variant="body" style={{ fontSize: 16, color: theme.text.secondary }}>
+                  High Score:
+                </AppText>
+                <AppText variant="body" style={{ fontSize: 20, fontWeight: "bold", color: "#F5F5DC" }}>
+                  {highScore}
+                </AppText>
               </View>
               <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 12 }}>
-                <AppText variant="body" style={{ fontSize: 16, color: theme.text.secondary }}>Tier:</AppText>
-                <AppText variant="body" style={{ fontSize: 16, fontWeight: "bold", color: "#F5F5DC" }}>{currentTier}</AppText>
+                <AppText variant="body" style={{ fontSize: 16, color: theme.text.secondary }}>
+                  Tier:
+                </AppText>
+                <AppText variant="body" style={{ fontSize: 16, fontWeight: "bold", color: "#F5F5DC" }}>
+                  {currentTier}
+                </AppText>
               </View>
               <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                <AppText variant="body" style={{ fontSize: 16, color: theme.text.secondary }}>Multiplier:</AppText>
-                <AppText variant="body" style={{ fontSize: 16, fontWeight: "bold", color: "#F5F5DC" }}>x{multiplier}</AppText>
+                <AppText variant="body" style={{ fontSize: 16, color: theme.text.secondary }}>
+                  Multiplier:
+                </AppText>
+                <AppText variant="body" style={{ fontSize: 16, fontWeight: "bold", color: "#F5F5DC" }}>
+                  x{multiplier}
+                </AppText>
               </View>
             </View>
 
@@ -227,6 +395,6 @@ export default function SnakeGameScreen({ navigation }: Props) {
           </View>
         </View>
       </Modal>
-    </ScreenBackground>
+    </View>
   );
 }

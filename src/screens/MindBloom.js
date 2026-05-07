@@ -32,17 +32,17 @@ const challenges = [
   { id: "3", title: "Daily Quiz", image: QuizImage, color: "white", screen: "QuizScreen" },
   { id: "4", title: "Number Game", image: Maths, color: "white", screen: "Maths" },
   { id: "5", title: "Word Completion",image: Words, color: "white", screen: "WordComp" },
-  { id: "6", title: "KenKen", icon: "puzzle-outline", color: "white", screen: "KenKenGame" },
-  { id: "7", title: "Breathing", icon: "meditation", color: "white", screen: "BreathingScreen" },
+  { id: "6", title: "KenKen", icon: "puzzle-outline", color: "white", screen: "KenKenGame", useMaterial: true },
+  { id: "7", title: "Breathing", icon: "meditation", color: "white", screen: "BreathingScreen", useMaterial: true },
   { id: "8", title: "Mood Journal", image: Mood, color: "white", screen: "MoodJournalScreen" },
   { id: "9", title: "Ball Sort",image: Balls, color: "white", screen: "BallSortGame" },
-  { id: "10", title: "Take A Walk", icon: "walk", color: "white", screen: "Walking" },
-  { id: "11", title: "Snake Master", icon: "snake", color: "white", screen: "SnakeGame" },
-  { id: "12", title: "Zip Challenge", icon: "lightning-bolt", color: "white", screen: "ZipGame" },
-  { id: "13", title: "Minesweeper", icon: "landmine", color: "white", screen: "MinesweeperGame" },
-  { id: "14", title: "2048", icon: "numeric", color: "white", screen: "Game2048" },
-  { id: "15", title: "Math Maze", icon: "maze", color: "white", screen: "MathMaze" },
-  { id: "16", title: "Tic Tac Toe", icon: "noughts-and-crosses", color: "white", screen: "TicTacToe" },
+  { id: "10", title: "Take A Walk", icon: "walk", color: "white", screen: "Walking", useMaterial: true },
+  { id: "11", title: "Snake Master", icon: "snake", color: "white", screen: "SnakeGame", useMaterial: true },
+  { id: "12", title: "Zip Challenge", icon: "vector-polyline", color: "white", screen: "ZipGame", useMaterial: true },
+  { id: "13", title: "Minesweeper", icon: "bomb", color: "white", screen: "MinesweeperGame", useMaterial: true },
+  { id: "14", title: "2048", icon: "numeric-9-box-multiple-outline", color: "white", screen: "Game2048", useMaterial: true },
+  { id: "15", title: "Math Maze", icon: "function-variant", color: "white", screen: "MathMaze", useMaterial: true },
+  { id: "16", title: "Tic Tac Toe", icon: "pound", color: "white", screen: "TicTacToe", useMaterial: true },
 ];
 
 const auraTasks = [
@@ -104,7 +104,7 @@ const MindbloomDaily = ({ navigation }) => {
       {/* Render image if provided, otherwise icon */}
       {item.image ? (
         <Image source={item.image} style={{ width: 32, height: 32, resizeMode: "contain" }} />
-      ) : (item.id == "10" || item.id == "7" || item.id == "11" )? (
+      ) : item.useMaterial ? (
         <MaterialIcon name={item.icon} size={32} color="black" />
       ) : (
         <Icon name={item.icon} size={32} color="black" />

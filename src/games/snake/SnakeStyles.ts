@@ -45,8 +45,7 @@ export const createSnakeStyles = (theme: any, boardSize: number) =>
     },
     boardShell: {
       width: boardSize,
-      alignSelf: "center",
-      padding: GAME_CONFIG.BOARD_PADDING,
+      height: boardSize,
       borderRadius: GAME_CONFIG.BOARD_BORDER_RADIUS,
       backgroundColor: theme.components.card,
       borderWidth: 1,
@@ -56,10 +55,11 @@ export const createSnakeStyles = (theme: any, boardSize: number) =>
       shadowRadius: GAME_CONFIG.BOARD_SHELL_SHADOW_RADIUS,
       shadowOffset: { width: 0, height: GAME_CONFIG.BOARD_SHELL_SHADOW_OFFSET_Y },
       elevation: GAME_CONFIG.BOARD_SHELL_ELEVATION,
+      overflow: "hidden",
     },
     boardFrame: {
       width: "100%",
-      aspectRatio: 1,
+      height: "100%",
       borderRadius: GAME_CONFIG.BOARD_FRAME_BORDER_RADIUS,
       overflow: "hidden",
       backgroundColor:

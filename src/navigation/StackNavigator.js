@@ -57,6 +57,7 @@ import TicTacToeNavigator from "../games/tictactoe/TicTacToeNavigator";
 import KenKenScreen from "../screens/KenKenScreen";
 import MinesweeperScreen from "../screens/MinesweeperScreen";
 import Game2048Screen from "../screens/Game2048Screen";
+import MathMazeScreen from "../screens/MathMazeScreen";
 
 import TetrisTestScreen from "../screens/TetrisTestScreen";
 import UserQuiz from "../screens/UserQuiz";
@@ -134,6 +135,7 @@ const StackNavigator = () => {
           <Stack.Screen name="KenKenGame" component={KenKenScreen} />
           <Stack.Screen name="MinesweeperGame" component={MinesweeperScreen} />
           <Stack.Screen name="Game2048" component={Game2048Screen} />
+          <Stack.Screen name="MathMaze" component={MathMazeScreen} />
 
 
 

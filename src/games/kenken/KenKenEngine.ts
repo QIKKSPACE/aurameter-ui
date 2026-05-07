@@ -250,3 +250,140 @@ export const getHint = (grid: CellState[][], level: KenKenLevel): GridCoord | nu
 
   return null;
 };
+
+export const findWrongCells = (
+  grid: CellState[][],
+  gridSize: number,
+  solution: number[][]
+): GridCoord[] => {
+  const wrongCells: GridCoord[] = [];
+
+  for (let row = 0; row < gridSize; row++) {
+    for (let col = 0; col < gridSize; col++) {
+      const cell = grid[row][col];
+      if (cell.value !== null && cell.value !== solution[row][col]) {
+        wrongCells.push({ row, col });
+      }
+    }
+  }
+
+  return wrongCells;
+};
+
+export const findForcedCell = (
+  grid: CellState[][],
+  gridSize: number,
+  cages: Cage[],
+  solution: number[][]
+): { cell: GridCoord; value: number } | null => {
+  for (let row = 0; row < gridSize; row++) {
+    for (let col = 0; col < gridSize; col++) {
+      if (grid[row][col].value !== null) continue; // skip filled cells
+
+      // Find which numbers are already in this row or column
+      const usedInRow = new Set<number>();
+      const usedInCol = new Set<number>();
+
+      for (let c = 0; c < gridSize; c++) {
+        if (grid[row][c].value !== null) {
+          usedInRow.add(grid[row][c].value);
+        }
+      }
+
+      for (let r = 0; r < gridSize; r++) {
+        if (grid[r][col].value !== null) {
+          usedInCol.add(grid[r][col].value);
+        }
+      }
+
+      // Find valid values for this cell
+      const validValues: number[] = [];
+      for (let num = 1; num <= gridSize; num++) {
+        if (!usedInRow.has(num) && !usedInCol.has(num)) {
+          validValues.push(num);
+        }
+      }
+
+      // If only one valid value, this is a forced cell
+      if (validValues.length === 1) {
+        return {
+          cell: { row, col },
+          value: validValues[0],
+        };
+      }
+    }
+  }
+
+  return null;
+};
+
+export const findHintCage = (
+  grid: CellState[][],
+  gridSize: number,
+  cages: Cage[]
+): Cage | null => {
+  let bestCage: Cage | null = null;
+  let fewestEmpty = gridSize * gridSize + 1;
+
+  for (const cage of cages) {
+    // Count empty cells in this cage
+    const emptyCount = cage.cells.filter((c) => grid[c.row][c.col].value === null).length;
+
+    // Skip if cage is complete
+    if (emptyCount === 0) continue;
+
+    // Pick cage with fewest empty cells (most constrained)
+    if (emptyCount < fewestEmpty) {
+      fewestEmpty = emptyCount;
+      bestCage = cage;
+    }
+  }
+
+  return bestCage;
+};
+
+export const getHintRevealCell = (
+  grid: CellState[][],
+  gridSize: number,
+  solution: number[][]
+): { cell: GridCoord; value: number } | null => {
+  // Find any empty cell where the correct value can be determined by elimination
+  for (let row = 0; row < gridSize; row++) {
+    for (let col = 0; col < gridSize; col++) {
+      if (grid[row][col].value !== null) continue;
+
+      // Count how many values are possible for this cell via row/column elimination
+      const usedInRow = new Set<number>();
+      const usedInCol = new Set<number>();
+
+      for (let c = 0; c < gridSize; c++) {
+        if (grid[row][c].value !== null) {
+          usedInRow.add(grid[row][c].value);
+        }
+      }
+
+      for (let r = 0; r < gridSize; r++) {
+        if (grid[r][col].value !== null) {
+          usedInCol.add(grid[r][col].value);
+        }
+      }
+
+      const validValues: number[] = [];
+      for (let num = 1; num <= gridSize; num++) {
+        if (!usedInRow.has(num) && !usedInCol.has(num)) {
+          validValues.push(num);
+        }
+      }
+
+      // If at least one possibility exists, return the first one with its correct solution
+      if (validValues.length > 0) {
+        return {
+          cell: { row, col },
+          value: solution[row][col],
+        };
+      }
+    }
+  }
+
+  return null;
+};

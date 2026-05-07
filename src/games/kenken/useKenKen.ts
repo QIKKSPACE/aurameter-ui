@@ -8,6 +8,10 @@ import {
   setCellNotes,
   isGridComplete,
   getHint,
+  findWrongCells,
+  findForcedCell,
+  findHintCage,
+  getHintRevealCell,
 } from './KenKenEngine';
 import type { KenKenGameState, GridCoord, CellState, KenKenLevel } from './KenKenTypes';
 
@@ -17,7 +21,9 @@ export const useKenKen = (levelId: number = 1) => {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [hintsUsed, setHintsUsed] = useState(0);
   const [isCompleted, setIsCompleted] = useState(false);
-  const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [hintMessage, setHintMessage] = useState<string | null>(null);
+  const [highlightedCells, setHighlightedCells] = useState<GridCoord[]>([]);
+  const [hintCellFlash, setHintCellFlash] = useState<GridCoord | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasStartedRef = useRef(false);
@@ -30,13 +36,32 @@ export const useKenKen = (levelId: number = 1) => {
       const level = getLevelById(currentLevelId);
       if (!level) return;
 
+      // Reset state synchronously BEFORE any async operations
+      // This prevents the completion effect from firing on initial load
+      setIsCompleted(false);
+      hasStartedRef.current = false;
+      setElapsedSeconds(0);
+      setHintsUsed(0);
+
       const savedProgress = await AsyncStorage.getItem(`@aurameter/kenken-progress-${currentLevelId}`);
       let state: KenKenGameState;
 
       if (savedProgress) {
         try {
           const parsed = JSON.parse(savedProgress);
+          // If marked as completed, start fresh
           if (parsed.isCompleted) {
+            state = {
+              level,
+              grid: initializeGrid(level),
+              selectedCell: null,
+              isCompleted: false,
+              mistakesCount: 0,
+              isPencilMode: false,
+            };
+          } else if (isGridComplete(parsed.grid, level)) {
+            // Grid is complete but not marked as completed
+            // This is an inconsistent state - start fresh
             state = {
               level,
               grid: initializeGrid(level),
@@ -74,10 +99,6 @@ export const useKenKen = (levelId: number = 1) => {
       undoStackRef.current = [];
       redoStackRef.current = [];
       hasStartedRef.current = false;
-      setIsTimerRunning(false);
-      setElapsedSeconds(0);
-      setHintsUsed(0);
-      setIsCompleted(false);
     };
 
     loadLevel();
@@ -93,6 +114,8 @@ export const useKenKen = (levelId: number = 1) => {
 
   useEffect(() => {
     if (!gameState) return;
+    // Only trigger completion if the user has actually interacted with this level
+    if (!hasStartedRef.current) return;
 
     if (isGridComplete(gameState.grid, gameState.level)) {
       setIsCompleted(true);
@@ -127,28 +150,32 @@ export const useKenKen = (levelId: number = 1) => {
       };
       saveProgress();
     }
-  }, [gameState]);
+  }, [gameState, stopTimer]);
 
-  useEffect(() => {
-    if (!isTimerRunning || isCompleted) {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-      return;
-    }
-
+  const startTimer = useCallback(() => {
+    if (timerRef.current) return; // already running
     timerRef.current = setInterval(() => {
       setElapsedSeconds((prev) => prev + 1);
     }, 1000);
+  }, []);
 
+  const stopTimer = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  const resetTimer = useCallback(() => {
+    stopTimer();
+    setElapsedSeconds(0);
+  }, [stopTimer]);
+
+  useEffect(() => {
     return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
+      stopTimer();
     };
-  }, [isTimerRunning, isCompleted]);
+  }, [stopTimer]);
 
   const handleCellPress = useCallback(
     (row: number, col: number) => {
@@ -156,7 +183,7 @@ export const useKenKen = (levelId: number = 1) => {
 
       if (!hasStartedRef.current && !gameState.grid[row][col].isGiven) {
         hasStartedRef.current = true;
-        setIsTimerRunning(true);
+        startTimer();
       }
 
       setGameState((prev) => {
@@ -179,7 +206,7 @@ export const useKenKen = (levelId: number = 1) => {
 
       if (!hasStartedRef.current) {
         hasStartedRef.current = true;
-        setIsTimerRunning(true);
+        startTimer();
       }
 
       setGameState((prev) => {
@@ -240,33 +267,88 @@ export const useKenKen = (levelId: number = 1) => {
   }, [gameState]);
 
   const handleHint = useCallback(() => {
-    if (!gameState || gameState.isCompleted) return;
+    const state = gameStateRef.current;
+    if (!state || state.isCompleted) return;
 
-    const hintCell = getHint(gameState.grid, gameState.level);
-    if (!hintCell) return;
-
-    setGameState((prev) => {
-      if (!prev) return prev;
-
-      const { row, col } = hintCell;
-      const correctValue = prev.level.solution[row][col];
-      const newGrid = setCellValue([...prev.grid], row, col, correctValue, prev.level);
-
-      undoStackRef.current.push(prev.grid);
-      if (undoStackRef.current.length > 20) {
-        undoStackRef.current.shift();
-      }
-      redoStackRef.current = [];
-
-      return {
-        ...prev,
-        grid: newGrid,
-        selectedCell: hintCell,
-      };
-    });
+    const { grid, level } = state;
+    const { gridSize, cages, solution } = level;
 
     setHintsUsed((prev) => prev + 1);
-  }, [gameState]);
+
+    // PRIORITY 1: Find wrong cells
+    const wrongCells = findWrongCells(grid, gridSize, solution);
+    if (wrongCells.length > 0) {
+      setHighlightedCells(wrongCells);
+      setHintMessage(
+        wrongCells.length === 1
+          ? 'This cell has an incorrect value.'
+          : `${wrongCells.length} cells have incorrect values.`
+      );
+      // Auto-clear highlight after 3 seconds
+      const timer = setTimeout(() => setHighlightedCells([]), 3000);
+      return () => clearTimeout(timer);
+    }
+
+    // PRIORITY 2: Find forced cell
+    const forced = findForcedCell(grid, gridSize, cages, solution);
+    if (forced) {
+      // Fill the forced cell with correct value
+      setGameState((prev) => {
+        if (!prev) return prev;
+        const newGrid = prev.grid.map((row, r) =>
+          row.map((cell, c) => {
+            if (r === forced.cell.row && c === forced.cell.col) {
+              return { ...cell, value: forced.value };
+            }
+            return cell;
+          })
+        );
+        gameStateRef.current = { ...prev, grid: newGrid };
+        return { ...prev, grid: newGrid };
+      });
+      setHintCellFlash(forced.cell);
+      setHintMessage('We filled in a cell for you!');
+      const timer = setTimeout(() => setHintCellFlash(null), 1500);
+      return () => clearTimeout(timer);
+    }
+
+    // PRIORITY 3: Highlight a cage
+    const hintCage = findHintCage(grid, gridSize, cages);
+    if (hintCage) {
+      const emptyCellsInCage = hintCage.cells.filter((c) => grid[c.row][c.col].value === null);
+      setHighlightedCells(emptyCellsInCage);
+      setHintMessage('Focus on this cage next.');
+      const timer = setTimeout(() => setHighlightedCells([]), 3000);
+      return () => clearTimeout(timer);
+    }
+
+    // PRIORITY 4: Reveal a cell by elimination
+    const reveal = getHintRevealCell(grid, gridSize, solution);
+    if (reveal) {
+      setGameState((prev) => {
+        if (!prev) return prev;
+        const newGrid = prev.grid.map((row, r) =>
+          row.map((cell, c) => {
+            if (r === reveal.cell.row && c === reveal.cell.col) {
+              return { ...cell, value: reveal.value };
+            }
+            return cell;
+          })
+        );
+        gameStateRef.current = { ...prev, grid: newGrid };
+        return { ...prev, grid: newGrid };
+      });
+      setHintCellFlash(reveal.cell);
+      setHintMessage('We gave you a starting point!');
+      const timer = setTimeout(() => setHintCellFlash(null), 1500);
+      return () => clearTimeout(timer);
+    }
+
+    // No hint available
+    setHintMessage('The puzzle looks complete — check for errors!');
+    const timer = setTimeout(() => setHintMessage(null), 2000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleUndo = useCallback(() => {
     if (!gameState || undoStackRef.current.length === 0) return;
@@ -355,7 +437,7 @@ export const useKenKen = (levelId: number = 1) => {
         isPencilMode: !prev.isPencilMode,
       };
     });
-  }, [gameState]);
+  }, []);
 
   const handleReset = useCallback(() => {
     const level = getLevelById(currentLevelId);
@@ -375,24 +457,27 @@ export const useKenKen = (levelId: number = 1) => {
     undoStackRef.current = [];
     redoStackRef.current = [];
     hasStartedRef.current = false;
-    setIsTimerRunning(false);
-    setElapsedSeconds(0);
+    resetTimer();
     setHintsUsed(0);
     setIsCompleted(false);
-  }, [currentLevelId]);
+  }, [currentLevelId, resetTimer]);
 
   const handleNextLevel = useCallback(() => {
     const nextId = currentLevelId + 1;
     const nextLevel = getLevelById(nextId);
     if (!nextLevel) return;
+    resetTimer();
     setCurrentLevelId(nextId);
-  }, [currentLevelId]);
+  }, [currentLevelId, resetTimer]);
 
   return {
     gameState,
     elapsedSeconds,
     hintsUsed,
     isCompleted,
+    hintMessage,
+    highlightedCells,
+    hintCellFlash,
     handleCellPress,
     handleNumberInput,
     handleDelete,

@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useMemo } from "react";
+import React, { memo, useEffect, useMemo, useRef } from "react";
 import { View } from "react-native";
 import Animated, {
   Easing,
@@ -9,7 +9,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import AppText from "../../components/AppText";
-import type { Food, Obstacle, Point, SnakeSegment } from "./SnakeTypes";
+import type { Direction, Food, Obstacle, Point, SnakeSegment } from "./SnakeTypes";
 import { GAME_CONFIG } from "./GameConfig";
 
 type SnakeBoardProps = {
@@ -294,8 +294,14 @@ function SnakeBoardComponent({
   }, [gridSize, cellSize]);
 
   return (
-    <Animated.View style={[styles.boardShell, shellStyle]}>
-      <View style={styles.boardFrame}>
+    <Animated.View
+      style={[styles.boardShell, shellStyle]}
+      pointerEvents="none"
+    >
+      <View
+        style={styles.boardFrame}
+        collapsable={false}
+      >
         {gridLines}
 
         <FoodCell food={food} cellSize={cellSize} theme={theme} />
@@ -329,7 +335,7 @@ function SnakeBoardComponent({
         />
 
         {(countdownText || isPaused) && (
-          <View style={styles.countdownOverlay}>
+          <View style={styles.countdownOverlay} pointerEvents="none">
             <AppText variant="h1">
               {countdownText ?? GAME_CONFIG.STRINGS.PAUSED_TEXT}
             </AppText>
@@ -337,7 +343,7 @@ function SnakeBoardComponent({
         )}
 
         {isPaused && !countdownText ? (
-          <View style={styles.pausedBadge}>
+          <View style={styles.pausedBadge} pointerEvents="none">
             <AppText variant="caption">Auto-{GAME_CONFIG.STRINGS.PAUSED_TEXT.toLowerCase()}</AppText>
           </View>
         ) : null}
