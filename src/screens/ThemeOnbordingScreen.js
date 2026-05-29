@@ -20,6 +20,8 @@ import AppText from "../components/AppText";
 import api from "../services/api";
 import { useToast } from "../constants/context/ErrorContext";
 import axios from "axios";
+import MaterialIcon from "react-native-vector-icons/MaterialCommunityIcons";
+import { isThemeUnlocked } from "../constants/themeLocks";
 
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = width * 0.75;
@@ -65,6 +67,7 @@ const BackgroundPreview = React.memo(({ background }) => {
           })*/
 const ThemeCard = React.memo(
   ({ item, index, scrollX, selected, onSelect, setTheme }) => {
+    const unlocked = isThemeUnlocked(item.id);
     const inputRange = [
       (index - 1) * (CARD_WIDTH + SPACING),
       index * (CARD_WIDTH + SPACING),
@@ -90,6 +93,7 @@ const ThemeCard = React.memo(
         <TouchableOpacity
           activeOpacity={0.9}
           onPress={() => {
+            if (!unlocked) return;
             onSelect(item.id);
             setTheme(item.id); // 👈 still triggers live theme change globally
           }}
@@ -117,13 +121,19 @@ const ThemeCard = React.memo(
                   styles.themeType,
                   { color: item.subTextColor || "#BBB" },
                 ]}
-              >
-                {item.type}
+            >
+              {item.type}
               </Text>
             </View>
 
+            {!unlocked && (
+              <View style={styles.lockBadge}>
+                <MaterialIcon name="lock-outline" size={18} color="#fff" />
+              </View>
+            )}
+
             {/* Glow for selected theme */}
-            {selected === item.id && (
+            {selected === item.id && unlocked && (
               <LinearGradient
                 colors={["#00E5FF", "#A45EE5"]}
                 style={styles.activeGlow}
@@ -191,12 +201,16 @@ const ThemeOnboardingScreen = ({ navigation,route }) => {
   const { showToast } = useToast();
   
   const handleActivate = useCallback(async () => {
+  if (!isThemeUnlocked(selected)) {
+    showToast("This theme is locked right now", "error");
+    return;
+  }
   setIsOnboarding(true);
 
   try {
     const res = await axios.post(
-      "https://api.aurameter.in/auth/complete-onboarding/",
-      { themeId, campusId },          // request body
+      "http://localhost:5001/auth/complete-onboarding/",
+      { themeId: selected, campusId },          // request body
       {
         headers: {
           Authorization: `Bearer ${accessToken}`, // include token directly
@@ -224,7 +238,7 @@ const ThemeOnboardingScreen = ({ navigation,route }) => {
     setIsOnboarding(false);
     showToast("Something went wrong", "error");
   }
-}, [themeId, campusId, accessToken]);
+}, [selected, campusId, accessToken, dispatch, refreshToken, showToast, user]);
 
   return (
     <ScreenBackground>
@@ -352,6 +366,17 @@ const styles = StyleSheet.create({
     bottom: 0,
     height: 5,
     width: "100%",
+  },
+  lockBadge: {
+    position: "absolute",
+    top: 14,
+    right: 14,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "rgba(0,0,0,0.46)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   activateBtn: {
     position: "absolute",

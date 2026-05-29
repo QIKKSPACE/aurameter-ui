@@ -1,5 +1,7 @@
 import { createSlice } from '@reduxjs/toolkit';
 
+const MAX_HINTS = 5;
+
 const initialState = {
   sudoku: [],
   answer: [],
@@ -41,6 +43,8 @@ const sudokuSlice = createSlice({
 
     takeHint(state, action) {
       const { row, col } = action.payload;
+      if (state.hintsTaken >= MAX_HINTS) return;
+      if (row == null || col == null) return;
 
       state.userCurrentPosition[row][col] =
         state.answer[row][col];
@@ -54,7 +58,7 @@ const sudokuSlice = createSlice({
     },
 
     incrementTime(state) {
-      if (state.isFocused) {
+      if (state.isFocused && !state.hasAnswerShown) {
         state.totalTimeSpent += 1;
       }
     },

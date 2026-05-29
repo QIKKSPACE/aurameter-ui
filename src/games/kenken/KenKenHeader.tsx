@@ -7,9 +7,10 @@ import { KENKEN_COLORS } from './KenKenColors';
 type Props = {
   elapsedSeconds: number;
   onBack: () => void;
+  onInfo: () => void;
 };
 
-const KenKenHeaderComponent = ({ elapsedSeconds, onBack }: Props) => {
+const KenKenHeaderComponent = ({ elapsedSeconds, onBack, onInfo }: Props) => {
   const styles = useMemo(() => {
     return StyleSheet.create({
       header: {
@@ -36,6 +37,11 @@ const KenKenHeaderComponent = ({ elapsedSeconds, onBack }: Props) => {
         flex: 1,
         textAlign: 'center',
       },
+      rightSection: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+      },
       timerPill: {
         backgroundColor: KENKEN_COLORS.TIMER_BACKGROUND,
         borderRadius: 20,
@@ -49,6 +55,22 @@ const KenKenHeaderComponent = ({ elapsedSeconds, onBack }: Props) => {
         fontSize: 16,
         fontWeight: '600',
         color: KENKEN_COLORS.TIMER_TEXT_COLOR,
+      },
+      infoButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#2C2C2E',
+        borderWidth: 1,
+        borderColor: 'rgba(139,143,232,0.4)',
+        justifyContent: 'center',
+        alignItems: 'center',
+      },
+      infoText: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#8B8FE8',
+        fontStyle: 'italic',
       },
     });
   }, []);
@@ -67,9 +89,15 @@ const KenKenHeaderComponent = ({ elapsedSeconds, onBack }: Props) => {
 
       <AppText style={styles.title}>KenKen</AppText>
 
-      <View style={styles.timerPill}>
-        <Icon name="clock" size={14} color={KENKEN_COLORS.TIMER_ICON_COLOR} />
-        <AppText style={styles.timerText}>{formatTime(elapsedSeconds)}</AppText>
+      <View style={styles.rightSection}>
+        <View style={styles.timerPill}>
+          <Icon name="clock" size={14} color={KENKEN_COLORS.TIMER_ICON_COLOR} />
+          <AppText style={styles.timerText}>{formatTime(elapsedSeconds)}</AppText>
+        </View>
+
+        <TouchableOpacity activeOpacity={0.7} onPress={onInfo} style={styles.infoButton}>
+          <AppText style={styles.infoText}>i</AppText>
+        </TouchableOpacity>
       </View>
     </View>
   );

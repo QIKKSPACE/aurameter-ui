@@ -1,14 +1,17 @@
 import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Game2048State } from './Game2048Types';
 import { GAME_2048_COLORS } from './Game2048Colors';
 
 type Props = {
   gameState: Game2048State;
   onNewGame: () => void;
+  onInfoPress: () => void;
+  onGoBack?: () => void;
 };
 
-export default function Game2048Header({ gameState, onNewGame }: Props) {
+export default function Game2048Header({ gameState, onNewGame, onInfoPress, onGoBack }: Props) {
   const styles = useMemo(
     () =>
       StyleSheet.create({
@@ -65,13 +68,47 @@ export default function Game2048Header({ gameState, onNewGame }: Props) {
           fontSize: 12,
           fontWeight: '600',
         },
+        infoButton: {
+          width: 36,
+          height: 36,
+          borderRadius: 18,
+          backgroundColor: '#BBADA0',
+          justifyContent: 'center',
+          alignItems: 'center',
+        },
+        infoButtonText: {
+          fontSize: 16,
+          fontWeight: '700',
+          color: '#776E65',
+          fontStyle: 'italic',
+        },
       }),
     []
   );
 
   return (
     <View style={styles.headerContainer}>
-      <Text style={styles.title}>2048</Text>
+      <View style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+        {onGoBack && (
+          <TouchableOpacity
+            onPress={onGoBack}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 10,
+              backgroundColor: '#BBADA0',
+              justifyContent: 'center',
+              alignItems: 'center',
+              marginBottom: 8,
+            }}
+          >
+            <Icon name="arrow-left" size={20} color="#F9F6F2" />
+          </TouchableOpacity>
+        )}
+        <Text style={styles.title}>2048</Text>
+      </View>
 
       <View style={styles.scoreSection}>
         <View style={styles.scoreBoxRow}>
@@ -86,13 +123,23 @@ export default function Game2048Header({ gameState, onNewGame }: Props) {
           </View>
         </View>
 
-        <TouchableOpacity
-          style={styles.newGameButton}
-          onPress={onNewGame}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.newGameButtonText}>New Game</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity
+            style={styles.infoButton}
+            onPress={onInfoPress}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.infoButtonText}>i</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.newGameButton}
+            onPress={onNewGame}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.newGameButtonText}>New Game</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );

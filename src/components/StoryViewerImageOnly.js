@@ -10,6 +10,8 @@ import { useDispatch, useSelector } from "react-redux";
 import StoryTopBar from './StoryTopBar'
 import MusicPreview from './MusicPreview'
 import AuraCommentModal from './AuraCommentModal'
+import FloatingAura from './FloatingAura'
+
 import StoryLayersRenderer from './StoryLayersRenderer'
 import QuizRenderComponent from './StoryLayerQuiz'
 
@@ -28,7 +30,7 @@ import Icon from "react-native-vector-icons/Feather";
 import * as Animatable from "react-native-animatable";
 import api from "../services/api";
 import { markUploadAccepted } from "../utils/UploadQueue";
-import { deleteStory, markSingleStoryAsSeen } from "../store/storySlice";
+import { deleteStory, markSingleStoryAsSeen, sendStoryAura } from "../store/storySlice";
 import { updateUserField } from "../store/userSlice";
 import { useToast } from "../constants/context/ErrorContext";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
@@ -81,6 +83,7 @@ useEffect(() => {
   onComplete: () => setFinished(true),
 });
 useEffect(() => {
+
   if (finished) {
     onComplete?.();
   }
@@ -92,8 +95,19 @@ useEffect(() => {
   const [audioReady, setAudioReady] = useState(false);
 const [audioBuffering, setAudioBuffering] = useState(false);
 const pausedByBlurRef = useRef(false);
-
+const [floatingAuras, setFloatingAuras] = useState([]);
 const hasAudio = !!activeStory?.music?.streamUrl;
+const spawnAura = (value) => {
+  const id = Date.now() + Math.random();
+
+  setFloatingAuras((prev) => [
+    ...prev,
+    {  
+      id,
+      value,
+    },
+  ]);
+};
   /* Reset per story */
 useEffect(() => {
    pausedByBlurRef.current = false;
@@ -173,8 +187,8 @@ const { comments, isLoading, isError } = useSelector(state =>
  
   
   useEffect(()=>{
-   // if(stor)
-   if(isLoading || comments.length || activeStory?.status!=="sent") return
+   // if(stor) console.log(comments,isLoading,activeStory?.status)
+   if(isLoading || comments.length || activeStory?.status!=="ACCEPTED") return
   dispatch(fetchCommentsByStoryId(activeStory?.story_id))
   },[activeStory?.story_id])
 
@@ -328,7 +342,7 @@ const deleteStoryFn = async(storyId,status) => {
   />
 
   <Animated.Image
-    source={{ uri: activeStory.media_url }}
+    source={{ uri: `${activeStory.media_url}` }}
     style={styles.image}
     resizeMode="contain"
     onLoad={() => setImageLoaded(true)}
@@ -399,7 +413,8 @@ resizeMode="contain"
 />
 <Text style={styles.actionLabel}>Aura AI</Text>
 </TouchableOpacity>
-<TouchableOpacity
+{activeUser?.user_id !== userdata?.id && (
+  <TouchableOpacity
   style={[styles.actionBtn, { marginTop: 20 }]}
   onPress={() => openOverlay("auraDial")}
 >
@@ -409,7 +424,8 @@ style={{width:40,height:40,borderRadius:20}}
 resizeMode="contain"
 />
 <Text style={styles.actionLabel}>Aura</Text>
-</TouchableOpacity>
+</TouchableOpacity>)}
+
 
 <TouchableOpacity style={[styles.actionBtn,{marginTop:20}]}   onPress={() => openOverlay("reply")}>
 <Icon name="message-circle" size={26} color="#fff" />
@@ -459,25 +475,41 @@ resizeMode="contain"
   story={activeStory}
   user={userdata}
 />
+
 <AuraDialModal
   visible={activeOverlay === "auraDial"}
   onClose={closeOverlay}
-  onSend={(value) => {
-    // SEND AURA HERE
-    console.log("Aura sent:", value);
+  currentUserAura={userdata?.aura || 0}
+  canSendNegative={activeUser?.follows_me_back}
+  hasSentAura={activeStory?.has_sent_aura}
+  sentAuraValue={activeStory?.sent_aura_value || 0}
 
-    // example payload
-    // dispatch(sendAura({
-    //   to_user_id: activeUser.user_id,
-    //   story_id: activeStory.story_id,
-    //   value
-    // }));
+  onSend={(value) => {
+    spawnAura(value);
+
+    dispatch(
+      sendStoryAura({
+        story_id: activeStory?.story_id,
+        user_id_story: activeUser?.user_id,
+        aura: value,
+      })
+    );
 
     closeOverlay();
   }}
+
   onConfirmNegative={(value) => {
-    // optional: custom confirm UI
-    console.log("Confirm negative aura:", value);
+    spawnAura(value);
+
+    dispatch(
+      sendStoryAura({
+        story_id: activeStory?.story_id,
+        user_id_story: activeUser?.user_id,
+        aura: value,
+      })
+    );
+
+    closeOverlay();
   }}
 />
 {activeStory?.layers?.length > 0 &&
@@ -497,7 +529,18 @@ resizeMode="contain"
       </View>
     );
   })}
-
+{floatingAuras.map((item, index) => (
+  <FloatingAura
+    key={item.id}
+    value={item.value}
+    index={index}
+    onFinish={() => {
+      setFloatingAuras((prev) =>
+        prev.filter((x) => x.id !== item.id)
+      );
+    }}
+  />
+))}
 </View>
   );
 }

@@ -1,11 +1,84 @@
 import { createSlice } from "@reduxjs/toolkit";
-
+import { updateUserData } from "./userSlice";
+import api from "../services/api";
 const initialState = {
   stories: [],
   loading: false,
   error: null,
 };
+export const sendStoryAura =
+  ({
+    story_id,
+    user_id_story,
+    aura,
+  }) =>
+  async (dispatch, getState) => {
+    try {
+      const state = getState();  
 
+      const currentAura =
+        state.user.userData?.aura || 0;
+
+      /* ---------------- OPTIMISTIC STORY ---------------- */
+
+      dispatch(
+        applyStoryAuraOptimistic({
+          user_id: user_id_story,
+          story_id,
+          aura,
+        })
+      );
+
+      /* ---------------- OPTIMISTIC USER AURA ---------------- */
+
+      if (aura > 0) {
+        dispatch(
+          updateUserData({
+            aura: currentAura - aura,
+          })
+        );
+      }
+
+      /* ---------------- API ---------------- */
+
+      await api.post("/story/story-aura", {
+        story_id,
+        user_id_story,
+        aura,
+      });
+
+    } catch (err) {
+      console.log(
+        "sendStoryAura error",
+        err
+      );
+
+      /* ---------------- ROLLBACK STORY ---------------- */
+
+      dispatch(
+        rollbackStoryAura({
+          user_id: user_id_story,
+          story_id,
+          aura,
+        })
+      );
+
+      /* ---------------- ROLLBACK USER AURA ---------------- */
+
+      if (aura > 0) {
+        const state = getState();
+
+        const latestAura =
+          state.user.userData?.aura || 0;
+
+        dispatch(
+          updateUserData({
+            aura: latestAura + aura,
+          })
+        );
+      }
+    }
+  };
 const ensureSelfUser = (state, userData) => {
   if (!userData) return;
 
@@ -153,19 +226,74 @@ const storySlice = createSlice({
         }
       });
     },
+      applyStoryAuraOptimistic: (state, action) => {
+  const {
+    user_id,
+    story_id,
+    aura,
+  } = action.payload;
+
+  const user = state.stories.find(
+    u => u.user_id === user_id
+  );
+
+  if (!user || !Array.isArray(user.stories)) return;
+
+  const story = user.stories.find(
+    s => s.story_id === story_id
+  );
+
+  if (!story) return;
+
+  if (story.has_sent_aura) return;
+
+  story.has_sent_aura = true;
+  story.sent_aura_value = aura;
+
+  story.aura_count =
+    (story.aura_count || 0) + aura;
+},
+rollbackStoryAura: (state, action) => {
+  const {
+    user_id,
+    story_id,
+    aura,
+  } = action.payload;
+
+  const user = state.stories.find(
+    u => u.user_id === user_id
+  );
+
+  if (!user || !Array.isArray(user.stories)) return;
+
+  const story = user.stories.find(
+    s => s.story_id === story_id
+  );
+
+  if (!story) return;
+
+  story.has_sent_aura = false;
+  story.sent_aura_value = null;
+
+  story.aura_count =
+    (story.aura_count || 0) - aura;
+},
   },
+
 });
 
 export const {
   fetchStoriesStart,
   fetchStoriesSuccess,
   fetchStoriesFailure,
-  addStoryOptimistic,
+  addStoryOptimistic, 
   updateStoryStatuses,
   updateStoryFromPolling,
   deleteStory,
   markSingleStoryAsSeen,
-  updateUserGroup
+  updateUserGroup,
+  applyStoryAuraOptimistic,
+  rollbackStoryAura,
 } = storySlice.actions;
 
 export default storySlice.reducer;

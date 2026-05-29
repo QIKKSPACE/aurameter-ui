@@ -19,7 +19,7 @@ const StoryViewer = ({ route }) => {
   return (
     <View style={{ flex: 1 }}>
       <StoryViewerImageOnly
-        users={sessionStories}
+        users={storiesFromStore}
         startUserIndex={startUserIndex}
         startStoryIndex={startStoryIndex}
         onComplete={() => navigation.goBack()}

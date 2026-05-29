@@ -19,8 +19,9 @@ import puzzleReducer from './puzzleSlice'
 import tetrisGameReducer from "./tetrisGameSlice";
 import sudokuReducer from "./sudokuSlice";
 import quizReducer from "./quizSlice";
-
-
+import deviceReducer from "./deviceSlice";
+import wordGameReducer from "./wordGameSlice";
+import ballSortReducer from "./ballSortSlice";
 import { messageGapListener } from "./messageGapListener";
 
 
@@ -120,7 +121,7 @@ const persistConfig = {
     "leaderboard",  // ✅ persist leaderboard
     "connect",  // ✅ persist leaderboard
     "chats",
-    "messages"],
+    "messages","device","wordGame","ballSort"],
   transforms: [storyTransform,chatTransform,messagesTransform],
 };
 
@@ -140,14 +141,18 @@ const appReducer = combineReducers({
   mathPuzzle: puzzleReducer,
    tetrisGame: tetrisGameReducer,
    sudoku:sudokuReducer,
-   quiz:quizReducer
+   quiz:quizReducer,
+       device: deviceReducer,
+       wordGame: wordGameReducer,
+       ballSort: ballSortReducer,
 });
 const rootReducer = (state, action) => {
   if (action.type === LOGOUT) {
-    // Reset only the Redux state
-    state = undefined;
-    // Do NOT call AsyncStorage.clear()
+    state = {
+      device: state?.device, // preserve device state
+    };
   }
+
   return appReducer(state, action);
 };
 const persistedReducer = persistReducer(persistConfig, rootReducer);

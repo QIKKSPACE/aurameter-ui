@@ -13,7 +13,7 @@ const HomeHeader = () => {
 
   return (
     <View style={styles.logoRow}>
-      <Image source={require("../../assets/newframe.png")} style={styles.auraIcon} />
+    
       <AppText variant="h2">AURAVERSE</AppText>
       <TouchableOpacity onPress={() => navigation.navigate("Search")}>
         <Icon name="search" size={26} color={theme.text.primary} />

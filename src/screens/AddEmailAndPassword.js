@@ -17,6 +17,7 @@ import Icon from "react-native-vector-icons/Feather";
 import { useTheme } from "../constants/context/ThemeContext";
 import ScreenBackground from "../components/ScreenBackground";
 import AppText from "../components/AppText";
+import { useSelector } from "react-redux";
 
 const AddEmailAndPassword = ({ route, navigation }) => {
   const { theme } = useTheme();
@@ -27,7 +28,9 @@ const AddEmailAndPassword = ({ route, navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
+   const deviceId = useSelector(
+  state => state.device.deviceId
+);
   // Animated values for toast
   const slideAnim = useRef(new Animated.Value(-80)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -55,16 +58,17 @@ const AddEmailAndPassword = ({ route, navigation }) => {
     }
 
     if (password !== rePassword) {
+    
       showError("Passwords do not match");
       return;
     }
 
     setLoading(true);
     try {
-      const response = await fetch("https://api.aurameter.in/auth/signup", {
+      const response = await fetch("http://localhost:5001/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, email, password }),
+        body: JSON.stringify({ username, email, password, deviceId }),
       });
       const data = await response.json();
 

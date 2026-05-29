@@ -6,6 +6,8 @@ import { useSelector, useDispatch } from "react-redux";
 import ScreenBackground from "../components/ScreenBackground";
 import StoriesBar from "../components/home/StoriesBar";
 import HomeHeader from "../components/home/HomeHeader";
+import Header from "../components/home/Header";
+
 import HomeTabs from "../components/home/HomeTabs";
 import GlobalLeaderboard from "../components/GlobalLeaderboard"; // ✅ import your leaderboard
 import CampusLeaderboard from "../components/CampusLeaderboard"; // ✅ import your leaderboard
@@ -22,7 +24,7 @@ const HomeScreen = () => {
     
   useStoryPolling(); // ✅ starts/stops polling automatically
 
-  const [activeTab, setActiveTab] = useState("Global");
+  const [activeTab, setActiveTab] = useState("Campus");
 
   const userData = useSelector(state => state.user.userData);
   const storiesData = useSelector(state => state.story.stories);
@@ -78,6 +80,7 @@ useEffect(() => {
 
   const renderHeader = () => (
     <>
+      <Header />
       <StoriesBar stories={storiesForRender} />
       <HomeHeader />
       <HomeTabs activeTab={activeTab} onChange={setActiveTab} />
@@ -93,6 +96,7 @@ const renderLeaderboard = () => {
           <CampusLeaderboard
             navigation={navigation}
             isProfileCompletion={userData?.isProfileComplete === false}
+             userId={userData?.id}
           />
         </View>
       );

@@ -16,6 +16,8 @@ export function usePuzzleValidation(validatePressed = false) {
     const equationStatus = {};
     const cellStatus = {};
     let solvedCount = 0;
+    let completeCount = 0;
+    let wrongCount = 0;
 
     puzzle.equations.forEach((eq) => {
       const values = eq.cells.map((id) => {
@@ -27,25 +29,34 @@ export function usePuzzleValidation(validatePressed = false) {
         equationStatus[eq.id] = "incomplete";
         return;
       }
+      completeCount++;
 
       const correct =
         applyOperator(values, eq.operator) === eq.result;
 
       equationStatus[eq.id] = correct ? "correct" : "wrong";
       if (correct) solvedCount++;
+      if (!correct) wrongCount++;
 
       // Mark involved cells
-      if (validatePressed) {
-        eq.cells.forEach((id) => {
+      eq.cells.forEach((id) => {
+        if (validatePressed || correct || cellStatus[id] !== "correct") {
           cellStatus[id] = correct ? "correct" : "wrong";
-        });
-      }
+        }
+      });
     });
 
     return {
       equationStatus,
       cellStatus,
+      solvedCount,
+      completeCount,
+      wrongCount,
       allSolved: solvedCount === puzzle.equations.length,
+      progress:
+        puzzle.equations.length === 0
+          ? 0
+          : solvedCount / puzzle.equations.length,
     };
   }, [puzzle, validatePressed]);
 }

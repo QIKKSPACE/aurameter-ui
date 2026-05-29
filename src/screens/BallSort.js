@@ -1,23 +1,37 @@
-import React, { useRef, useState } from "react";
-import { Pressable, View } from "react-native";
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
+import { selectBallSortLevel, nextLevel } from '../store/ballSortSlice';
+import { StyleSheet, View, Dimensions, SafeAreaView, TouchableOpacity } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { LinearGradient } from 'react-native-linear-gradient';
 
-import ScreenBackground from "../components/ScreenBackground";
-import GameHeader from "../components/ballsort/GameHeader";
-import TubeGrid from "../components/ballsort/TubeGrid";
-import WinOverlay from "../components/ballsort/WinOverlay";
+import PremiumTubeGrid from '../components/ballsort/PremiumTubeGrid';
+import GameControls from '../components/ballsort/GameControls';
+import BallAnimator from '../animations/BallAnimator';
+import { usePremiumBallSort } from '../hooks/usePremiumBallSort';
+import { COLORS, CAPACITY } from '../constants/constants';
+import { useTheme } from '../constants/context/ThemeContext';
+import { GameHaptics } from '../utils/haptics';
+import TutorialOverlay from '../components/ballsort/TutorialOverlay';
+import WinOverlay from '../components/ballsort/WinOverlay';
+import HelpModal from '../components/ballsort/HelpModal';
+import { updateUserData } from '../store/userSlice';
+import { useToast } from '../constants/context/ErrorContext';
+import api from '../services/api';
 
+const { width } = Dimensions.get('window');
 
-import { useBallSortGame } from "../hooks/useBallSortGame";
-import { COLORS, CAPACITY } from "../constants/constants";
-import { deepClone } from "../utils/clone";
-import { useTheme } from "../constants/context/ThemeContext";
-
-const BallSortGameScreen = () => {
+const BallSortScreen = () => {
   const { theme } = useTheme();
-
-  // ✅ TEMP level state
-  const [level, setLevel] = useState(1);
-
+  const dispatch = useDispatch();
+  const level = useSelector(selectBallSortLevel);
+  const [movingBall, setMovingBall] = useState(null);
+  const [showHelp, setShowHelp] = useState(false);
+  const [tubeLayoutMap, setTubeLayoutMap] = useState({});
+  const moveCompletedRef = useRef(false);
+  const user=useSelector(state=>state.user)
+  const { showToast } = useToast();
+  
   const {
     tubes,
     setTubes,
@@ -26,95 +40,272 @@ const BallSortGameScreen = () => {
     selectedTube,
     setSelectedTube,
     hasWon,
-  } = useBallSortGame({
-    level,
-    capacity: CAPACITY,
-    colors: COLORS,
-  });
-const canMove = (from, to, tubes, capacity) => {
-  if (from === to) return false;
-  if (!tubes[from].length) return false;
-  if (tubes[to].length >= capacity) return false;
+    isMoving,
+    setIsMoving,
+    tubeLayouts,
+    onTubeLayout,
+    handleUndo,
+    handleRestart,
+    handleHint,
+    capacity
+  } = usePremiumBallSort({ level, capacity: CAPACITY, colors: COLORS });
 
-  if (!tubes[to].length) return true;
+  const rowSize = tubes.length <= 12 ? 6 : 7;
+  const maxItemsInRow = Math.max(1, Math.min(tubes.length, rowSize));
+  const horizontalGap = 10;
+  const availableWidth = width - 40; // 20px padding on each side
+  const calculatedBallSize = Math.min(42, Math.floor((availableWidth - (maxItemsInRow - 1) * horizontalGap) / maxItemsInRow) - 12);
+  const ballSize = Math.max(25, calculatedBallSize);
 
-  return true;
-};
+  useEffect(() => {
+    setMovingBall(null);
+    moveCompletedRef.current = false;
+  }, [level]);
 
-  // ✅ basic tube tap logic (NO animation yet)
- const onTubePress = (index) => {
-  // 1️⃣ No tube selected → select
-  if (selectedTube === -1) {
-  // ❗️do NOT select empty tube
-  if (!tubes[index].length) return;
+  const applyMove = useCallback((fromIdx, toIdx) => {
+    setTubes((prev) => {
+      const next = prev.map(t => [...t]);
+      const ball = next[fromIdx]?.pop();
+      if (ball) next[toIdx].push(ball);
+      return next;
+    });
+  }, [setTubes]);
 
-  setSelectedTube(index);
-  return;
-}
+  const handleTubeLayout = useCallback((index, layout) => {
+    onTubeLayout(index, layout);
+    setTubeLayoutMap((prev) => {
+      const current = prev[index];
+      if (
+        current &&
+        current.x === layout.x &&
+        current.y === layout.y &&
+        current.width === layout.width &&
+        current.height === layout.height
+      ) {
+        return prev;
+      }
+      return { ...prev, [index]: layout };
+    });
+  }, [onTubeLayout]);
 
-  // 2️⃣ Same tube tapped → deselect
-  if (selectedTube === index) {
+  const canMove = (from, to) => {
+    if (from === to) return false;
+    const fromTube = tubes[from];
+    const toTube = tubes[to];
+    
+    if (fromTube.length === 0) return false;
+    if (toTube.length >= capacity) return false;
+    
+    if (toTube.length === 0) return true;
+    
+    return fromTube[fromTube.length - 1] === toTube[toTube.length - 1];
+  };
+
+  const handleTubePress = (index) => {
+    if (isMoving || hasWon) return;
+
+    if (selectedTube === index) {
+      setSelectedTube(-1);
+      GameHaptics.buttonPress();
+      return;
+    }
+
+    if (selectedTube === -1) {
+      if (tubes[index].length > 0) {
+        setSelectedTube(index);
+        GameHaptics.selectTube();
+      }
+      return;
+    }
+
+    const from = selectedTube;
+    const to = index;
+
+    if (!canMove(from, to)) {
+      setSelectedTube(-1);
+      GameHaptics.invalidMove();
+      return;
+    }
+
+    setIsMoving(true);
     setSelectedTube(-1);
-    return;
+
+    const fromLayout = tubeLayoutMap[from] || tubeLayouts.current[from];
+    const toLayout = tubeLayoutMap[to] || tubeLayouts.current[to];
+    const fromTube = tubes[from];
+    const toTube = tubes[to];
+    if (!fromLayout || !toLayout) {
+      setHistory((prev) => [...prev, tubes.map(t => [...t])]);
+      applyMove(from, to);
+      setSelectedTube(-1);
+      setIsMoving(false);
+      return;
+    }
+
+    const ballColor = fromTube[fromTube.length - 1];
+
+    const startX = fromLayout.x + (fromLayout.width - ballSize) / 2;
+    const startY = fromLayout.y + fromLayout.height - 8 - (fromTube.length * ballSize) - ((fromTube.length - 1) * 2); 
+
+    const targetX = toLayout.x + (toLayout.width - ballSize) / 2;
+    const targetY = toLayout.y + toLayout.height - 8 - ((toTube.length + 1) * ballSize) - (toTube.length * 2);
+
+    setMovingBall({
+      color: ballColor,
+      startLayout: { x: startX, y: startY },
+      endLayout: { x: targetX, y: targetY },
+      fromIdx: from,
+      toIdx: to
+    });
+    moveCompletedRef.current = false;
+  };
+
+  const finishMovingBall = useCallback(() => {
+    if (!movingBall || moveCompletedRef.current) return;
+    moveCompletedRef.current = true;
+    
+    const { fromIdx, toIdx } = movingBall;
+
+    setHistory((prev) => [...prev, tubes.map(t => [...t])]);
+    applyMove(fromIdx, toIdx);
+    setMovingBall(null);
+    setIsMoving(false);
+  }, [applyMove, movingBall, tubes, setHistory, setIsMoving]);
+
+  useEffect(() => {
+    if (!movingBall) return undefined;
+    const fallback = setTimeout(finishMovingBall, 520);
+    return () => clearTimeout(fallback);
+  }, [finishMovingBall, movingBall]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (hasWon) {
+        GameHaptics.levelWin();
+      }
+    }, [hasWon])
+  );
+
+  const handleNextLevel = () => {
+    dispatch(nextLevel());
+  };
+
+  const handleBackgroundPress = () => {
+    if (selectedTube !== -1) {
+      setSelectedTube(-1);
+    }
+  };
+ const handleClaimReward = async () => {
+
+  
+  try {
+    const response = await api.post(
+      '/game/ball-sort-game',
+      {
+        level: level,
+        aura: level,
+      },
+    );
+
+    if (response?.data?.success) {
+    
+      dispatch(
+    updateUserData({
+      aura:
+        (user?.userData?.aura || 0) + level,
+    })
+  );
+showToast( `You claimed ${level} points.`, "success");
+handleNextLevel()
+    }
+  } catch (err) {
+    console.log(
+      'Claim reward error:',
+      err?.response?.data || err.message,
+    );
+showToast("Failed to Claim  Aura, Try again", "error");
   }
 
-  const from = selectedTube;
-  const to = index;
 
-  // 3️⃣ Validate move
-  if (!canMove(from, to, tubes, CAPACITY)) {
-    setSelectedTube(-1);
-    return;
-  }
-
-  // 4️⃣ Perform move
-  const newTubes = deepClone(tubes);
-  const ball = newTubes[from].pop();
-  newTubes[to].push(ball);
-
-  setHistory([...history, tubes]);
-  setTubes(newTubes);
-  setSelectedTube(-1);
-};
-
-const tubeLayouts = useRef({});
-
-const onTubeLayout = (index, layout) => {
-  tubeLayouts.current[index] = layout;
-};
+ }
   return (
-    <ScreenBackground>
-      <GameHeader
-        level={level}
-        onUndo={() => {}}
-        onRestart={() => setLevel(level)}
-        theme={theme}
+    <View style={styles.container}>
+      <LinearGradient 
+        colors={['#1a1b26', '#16161e', '#0f0f14']} 
+        style={StyleSheet.absoluteFillObject}
       />
-<Pressable
-  style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
-  onPress={() => setSelectedTube(-1)}
-> 
-
-      <TubeGrid
-        tubes={tubes}
-        selectedTube={selectedTube}
-        onTubePress={onTubePress}
-        theme={theme}
-        rowSize={4}
-        capacity={CAPACITY}
-          onTubeLayout={onTubeLayout}
-
-      />
-</Pressable>
-
-      {hasWon && (
-        <WinOverlay
-          theme={theme}
-          onNext={() => setLevel(level + 1)}
+      
+      <SafeAreaView style={styles.safeArea}>
+        <TutorialOverlay 
+          visible={level === 1 && selectedTube === -1 && history.length === 0 && !hasWon} 
+          text="Tap a tube to pick up the top ball"
         />
-      )}
-    </ScreenBackground>
+        <TutorialOverlay 
+          visible={level === 1 && selectedTube !== -1 && history.length === 0 && !hasWon} 
+          text="Tap another tube to move the ball"
+        />
+        <GameControls 
+          level={level} 
+          onUndo={handleUndo} 
+          onRestart={handleRestart} 
+          onHint={handleHint}
+          onHelp={() => setShowHelp(true)}
+          theme={theme}
+        />
+
+        <View
+          style={styles.gameArea} 
+        >
+          <TouchableOpacity
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1}
+            onPress={handleBackgroundPress}
+          />
+
+          <PremiumTubeGrid
+            key={`ball-sort-grid-${level}`}
+            layoutKey={level}
+            tubes={tubes}
+            capacity={capacity}
+            ballSize={ballSize}
+            selectedTube={selectedTube}
+            movingBallState={movingBall}
+            onTubeLayout={handleTubeLayout}
+            onTubePress={handleTubePress}
+          />
+
+          {movingBall && (
+            <BallAnimator
+              ballColor={movingBall.color}
+              ballSize={ballSize}
+              startLayout={movingBall.startLayout}
+              endLayout={movingBall.endLayout}
+              onAnimationComplete={finishMovingBall}
+            />
+          )}
+        </View>
+
+        <WinOverlay visible={hasWon} onNextLevel={handleNextLevel} claimReward={handleClaimReward} />
+        <HelpModal visible={showHelp} onClose={() => setShowHelp(false)} />
+      </SafeAreaView>
+    </View>
   );
 };
 
-export default BallSortGameScreen;
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#1a1b26',
+  },
+  safeArea: {
+    flex: 1,
+  },
+  gameArea: {
+    flex: 1,
+    position: 'relative',
+    marginTop: 20,
+    marginHorizontal: 10,
+  }
+});
+
+export default BallSortScreen;

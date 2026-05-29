@@ -1,286 +1,324 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import {
   View,
   Text,
-  TextInput,
   StyleSheet,
   Alert,
   TouchableOpacity,
   Dimensions,
   ActivityIndicator,
   AppState,
+  Modal,
+  SafeAreaView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { useSelector, useDispatch } from 'react-redux';
 import { generateSudokuPuzzle } from '../hooks/useGenerateSudokuPuzzle';
-import { setFocusState, setPuzzle, showAnswer, takeHint, updateCell,incrementTime } from '../store/sudokuSlice';
+import { setFocusState, setPuzzle, showAnswer, takeHint, updateCell, incrementTime } from '../store/sudokuSlice';
 
-
-const screenWidth = Dimensions.get('window').width;
-const gridSize = Math.min(screenWidth - 40, 360);
-const cellSize = gridSize / 9;
+const { width } = Dimensions.get('window');
+const GRID_SIZE = width - 30;
+const CELL_SIZE = (GRID_SIZE - 10) / 9; // Account for borders
+const MAX_HINTS = 5;
 
 const SudokuGame = () => {
   const navigation = useNavigation();
   const dispatch = useDispatch();
   const appState = useRef(AppState.currentState);
 
-  const { sudoku, answer, userCurrentPosition, updatedAt, totalTimeSpent } =
-    useSelector((state) => state.sudoku);
+  const { sudoku, answer, userCurrentPosition, totalTimeSpent, hintsTaken } = useSelector((state) => state.sudoku);
 
   const [loading, setLoading] = useState(true);
-  const [focusedCell, setFocusedCell] = useState(null);
+  const [selectedCell, setSelectedCell] = useState(null); // { row, col }
+  const [checkModalVisible, setCheckModalVisible] = useState(false);
+  const [isSolved, setIsSolved] = useState(false);
 
+  // 1. Initial Load Logic
   useEffect(() => {
-    const now = Date.now();
-    const twentyFourHours = 24 * 60 * 60 * 1000;
-
-    if (!sudoku.length || !updatedAt || now - updatedAt > twentyFourHours) {
-      const { puzzle, solution } = generateSudokuPuzzle();
-      dispatch(setPuzzle({
-  puzzle,
-  solution,
-  previousAnswer: solution,
-}));
-
+    if (!sudoku.length) {
+      createNewGame();
     }
-
     setLoading(false);
-  }, [dispatch]);
+  }, []);
 
+  const createNewGame = () => {
+    const { puzzle, solution } = generateSudokuPuzzle();
+    dispatch(setPuzzle({ puzzle, solution, previousAnswer: solution }));
+    setIsSolved(false);
+    setCheckModalVisible(false);
+  };
+
+  // 2. Timer & AppState Logic
   useEffect(() => {
-    let isMounted = true;
     const interval = setInterval(() => {
-      if (isMounted && appState.current === 'active') {
-        try {
-          dispatch(incrementTime());
-        } catch (err) {
-          console.warn('Increment time error:', err);
-        }
-      }
+      if (appState.current === 'active') dispatch(incrementTime());
     }, 1000);
-
-    const subscription = AppState.addEventListener('change', (nextAppState) => {
-      if (isMounted) {
-        appState.current = nextAppState;
-        try {
-          dispatch(setFocusState(nextAppState === 'active'));
-        } catch (err) {
-          console.warn('AppState error:', err);
-        }
-      }
-    });
-
+    const sub = AppState.addEventListener('change', (next) => (appState.current = next));
     return () => {
-      isMounted = false;
       clearInterval(interval);
-      subscription.remove();
+      sub.remove();
     };
   }, [dispatch]);
 
-  const handleInputChange = (value, rowIndex, colIndex) => {
-    if (!isNaN(value)) {
-     dispatch(
-  updateCell({
-    row: rowIndex,
-    col: colIndex,
-    value: value ? parseInt(value, 10) : 0,
-  })
-);
-
+  // 3. Handlers
+  const handleNumberInput = (num) => {
+    if (selectedCell) {
+      const { row, col } = selectedCell;
+      if (sudoku[row][col] === 0) { // Only update if not a fixed starting number
+        dispatch(updateCell({ row, col, value: num }));
+      }
     }
   };
 
-  const handleHint = () => {
-    if (focusedCell) {
-      dispatch(takeHint({row:focusedCell.rowIndex, col:focusedCell.colIndex}));
-      setFocusedCell(null);
-    }
-  };
-//2d25f4e5-c7ab-4bdc-a122-25293abb6984,ucdvpnkf
-  const checkSolution = () => {
-    if (JSON.stringify(userCurrentPosition) === JSON.stringify(answer)) {
-      Alert.alert('🎉 Congratulations!', 'You have solved the puzzle!');
-    } else {
-      Alert.alert('❌ Try Again', 'The solution is not correct.');
-    }
+  const handleCheck = () => {
+    const solved = JSON.stringify(userCurrentPosition) === JSON.stringify(answer);
+    setIsSolved(solved);
+    setCheckModalVisible(true);
   };
 
-  const renderPuzzle = () => (
-    <View style={styles.grid}>
-      {sudoku.map((row, rowIndex) => (
-        <View
-          style={[
-            styles.row,
-            rowIndex % 3 === 0 ? styles.thickTopBorder : {},
-            rowIndex === 8 ? styles.thickBottomBorder : {},
-          ]}
-          key={rowIndex}
-        >
-          {row.map((_, colIndex) => (
-            <View
-              style={[
-                styles.cellContainer,
-                colIndex % 3 === 0 ? styles.thickLeftBorder : {},
-                colIndex === 8 ? styles.thickRightBorder : {},
-              ]}
-              key={colIndex}
-            >
-            <TextInput
-  style={[styles.cell,sudoku[rowIndex][colIndex] === 0?{backgroundColor:'black'}:{}]}
-  keyboardType="numeric"
-  maxLength={1}
-  value={
-    userCurrentPosition?.[rowIndex]?.[colIndex] === 0
-      ? ''
-      : userCurrentPosition?.[rowIndex]?.[colIndex]?.toString()
-  }
-  onFocus={() => setFocusedCell({ rowIndex, colIndex })}
-  onBlur={() => setFocusedCell(null)}
-  onChangeText={(value) =>
-    handleInputChange(value, rowIndex, colIndex)
-  }
-  editable={sudoku[rowIndex][colIndex] === 0} // Only disable if the initial value is not 0 (pre-filled cell)
-  selectTextOnFocus={true} // Optionally, automatically select text when focused
-/>
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
+  // 4. Helper for Highlights
+  const getSelectedValue = () => {
+    if (!selectedCell) return null;
+    return userCurrentPosition[selectedCell.row][selectedCell.col];
+  };
+
+  const selectedValue = useMemo(() => getSelectedValue(), [selectedCell, userCurrentPosition]);
+  const hintsRemaining = MAX_HINTS - hintsTaken;
+
+  const renderCell = (row, col) => {
+    const val = userCurrentPosition[row][col];
+    const isFixed = sudoku[row][col] !== 0;
+    const isSelected = selectedCell?.row === row && selectedCell?.col === col;
+    const isSameValue = val !== 0 && val === selectedValue;
+
+    return (
+      <TouchableOpacity
+        key={`${row}-${col}`}
+        activeOpacity={0.8}
+        onPress={() => setSelectedCell({ row, col })}
+        style={[
+          styles.cell,
+          isSelected && styles.cellSelected,
+          !isSelected && isSameValue && styles.cellHighlightValue,
+          // Draw the 3x3 subgrid borders
+          col % 3 === 2 && col !== 8 && { borderRightWidth: 3, borderRightColor: '#444' },
+          row % 3 === 2 && row !== 8 && { borderBottomWidth: 3, borderBottomColor: '#444' },
+        ]}
+      >
+        <Text style={[
+          styles.cellText,
+          isFixed ? styles.fixedText : styles.userText,
+          isSelected && { color: '#fff' }
+        ]}>
+          {val !== 0 ? val : ''}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
+  if (loading) return <View style={styles.container}><ActivityIndicator size="large" color="#00E5FF" /></View>;
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn}>
+          <Icon name="chevron-back" size={28} color="white" />
+        </TouchableOpacity>
+        <View style={styles.timerContainer}>
+          <Icon name="time-outline" size={20} color="#00E5FF" />
+          <Text style={styles.timerText}>{formatTime(totalTimeSpent)}</Text>
+        </View>
+        <TouchableOpacity style={styles.iconBtn} onPress={handleCheck}>
+          <Icon name="checkmark-done-circle" size={28} color="#00E5FF" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Grid */}
+      <View style={styles.gridCard}>
+        <View style={styles.grid}>
+          {userCurrentPosition.map((row, rowIndex) => (
+            <View key={rowIndex} style={styles.row}>
+              {row.map((_, colIndex) => renderCell(rowIndex, colIndex))}
             </View>
           ))}
         </View>
-      ))}
-    </View>
-  );
-
-  return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Icon name="arrow-back" size={24} color="#E5E5E5" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Sudoku Puzzle</Text>
       </View>
 
-      {loading || !sudoku.length ? (
-        <ActivityIndicator
-          size="large"
-          color="#00E5FF"
-          style={{ marginTop: 100 }}
-        />
-      ) : (
-        <>
-          <View style={styles.buttonRow}>
-            <TouchableOpacity style={styles.button} onPress={handleHint}>
-              <Text style={styles.buttonText}>💡 Hint</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.button}
-              onPress={() => dispatch(showAnswer())}
-            >
-              <Text style={styles.buttonText}>🧠 Solve</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.button} onPress={checkSolution}>
-              <Text style={styles.buttonText}>✅ Check</Text>
-            </TouchableOpacity>
-          </View>
+      {/* Number Pad */}
+      <View style={styles.numpad}>
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+          <TouchableOpacity 
+            key={num} 
+            style={styles.numBtn} 
+            onPress={() => handleNumberInput(num)}
+          >
+            <Text style={styles.numBtnText}>{num}</Text>
+          </TouchableOpacity>
+        ))}
+        <TouchableOpacity 
+          style={[styles.numBtn, styles.clearBtn]} 
+          onPress={() => handleNumberInput(0)}
+        >
+          <Icon name="refresh-outline" size={24} color="#FF3B30" />
+        </TouchableOpacity>
+      </View>
 
-          {renderPuzzle()}
-          <Text style={styles.timerText}>⏱ Time: {totalTimeSpent}s</Text>
-        </>
-      )}
-    </View>
+      {/* Actions */}
+      <View style={styles.footer}>
+       <TouchableOpacity
+  style={[
+    styles.actionBtn,
+    (!selectedCell || hintsRemaining <= 0) && styles.disabledBtn
+  ]}
+  disabled={!selectedCell || hintsRemaining <= 0}
+  onPress={() => {
+    if (hintsRemaining <= 0) {
+      Alert.alert('Hint limit reached', 'You can use up to 5 hints in one Sudoku game.');
+      return;
+    }
+    dispatch(
+      takeHint({
+        row: selectedCell?.row,
+        col: selectedCell?.col,
+      })
+    );
+  }}
+>
+  <Icon
+    name="bulb"
+    size={22}
+    color={!selectedCell || hintsRemaining <= 0 ? '#666' : '#FFD60A'}
+  />
+  <Text
+    style={[
+      styles.actionText,
+      (!selectedCell || hintsRemaining <= 0) && { color: '#666' }
+    ]}
+  >
+    Hint {hintsRemaining}/5
+  </Text>
+</TouchableOpacity>
+       
+      </View>
+
+      {/* Modals */}
+      <Modal visible={checkModalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Icon 
+              name={isSolved ? "trophy" : "close-circle"} 
+              size={80} 
+              color={isSolved ? "#FFD60A" : "#FF3B30"} 
+            />
+            <Text style={styles.modalTitle}>{isSolved ? "Masterpiece!" : "Not Quite..."}</Text>
+            <Text style={styles.modalText}>
+              {isSolved 
+                ? "You've conquered this puzzle with precision." 
+                : "There are some mistakes in the grid. Keep pushing!"}
+            </Text>
+            
+            <View style={styles.modalActions}>
+              {isSolved && (
+                <TouchableOpacity style={styles.primaryBtn} onPress={createNewGame}>
+                  <Text style={styles.primaryBtnText}>New Challenge</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity 
+                style={[styles.primaryBtn, { backgroundColor: '#333', marginTop: 10 }]} 
+                onPress={() => setCheckModalVisible(false)}
+              >
+                <Text style={styles.primaryBtnText}>Back to Grid</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    backgroundColor: '#0D1B2A',
-    paddingTop: 80,
-  },
-  row: {
-    flexDirection: 'row',
-  },
-  cellContainer: {
-    margin: 1,
-  },
- cell: {
-  width: cellSize,
-  height: cellSize,
-  backgroundColor: '#1B263B',
-  borderRadius: 5,
-  borderWidth: 1,
-  borderColor: '#00E5FF',
-   alignItems:'center',
-   justifyContent:'center',
-  textAlign: 'center',
-  textAlignVertical: 'center', // ✅ ANDROID FIX
-  padding: 0,                  // ✅ removes offset
-  margin: 0,
-
-  color: 'wheat',
-  fontSize: cellSize * 0.3,    // ✅ dynamic perfect size
-},
+  container: { flex: 1, backgroundColor: '#0A0A0A', alignItems: 'center' },
   header: {
-    flexDirection: 'row',
-    position: 'absolute',
-    top: 0,
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    width: '100%',
-    padding: 20,
-  },
-  headerTitle: {
-    color: '#E5E5E5',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginLeft: 15,
-  },
-  grid: {
-    width: gridSize,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 20,
-  },
-  thickTopBorder: {
-    borderTopWidth: 2,
-    borderTopColor: 'white',
-  },
-  thickLeftBorder: {
-    borderLeftWidth: 2,
-    borderLeftColor: 'white',
-  },
-  thickBottomBorder: {
-    borderBottomWidth: 2,
-    borderBottomColor: 'white',
-  },
-  thickRightBorder: {
-    borderRightWidth: 2,
-    borderRightColor: 'white',
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
     width: '90%',
-    marginBottom: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginVertical: 20,
   },
-  button: {
-    backgroundColor: '#1B263B',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 10,
+  timerContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1A1A1A', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20 },
+  timerText: { color: 'white', fontSize: 18, fontWeight: '600', marginLeft: 8, fontVariant: ['tabular-nums'] },
+  gridCard: {
+    backgroundColor: '#1A1A1A',
+    padding: 5,
+    borderRadius: 12,
+    elevation: 10,
+    shadowColor: '#00E5FF',
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+  },
+  grid: { width: GRID_SIZE, height: GRID_SIZE, backgroundColor: '#333' },
+  row: { flexDirection: 'row', flex: 1 },
+  cell: {
+    flex: 1,
+    backgroundColor: '#1A1A1A',
+    borderWidth: 0.5,
+    borderColor: '#333',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cellSelected: {
+    backgroundColor: '#00E5FF',
     borderColor: '#00E5FF',
+    zIndex: 10,
+    transform: [{ scale: 1.05 }],
+    borderRadius: 4,
+  },
+  cellHighlightValue: { backgroundColor: '#3d3d3d' },
+  cellText: { fontSize: CELL_SIZE * 0.5, fontWeight: '600' },
+  fixedText: { color: '#888' },
+  userText: { color: '#00E5FF' },
+  numpad: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    width: '90%',
+    marginTop: 30,
+  },
+  numBtn: {
+    width: width * 0.15,
+    height: width * 0.15,
+    backgroundColor: '#1A1A1A',
+    margin: 5,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 1,
+    borderColor: '#333',
   },
-  buttonText: {
-    color: 'wheat',
-    fontSize: 14,
-  },
-  timerText: {
-    color: '#E5E5E5',
-    marginTop: 10,
-    fontSize: 16,
-  },
+  numBtnText: { color: 'white', fontSize: 24, fontWeight: 'bold' },
+  clearBtn: { borderColor: '#FF3B30' },
+  footer: { flexDirection: 'row', marginTop: 20, width: '90%', justifyContent: 'space-around' },
+  actionBtn: { alignItems: 'center', padding: 10 },
+  actionText: { color: 'white', marginTop: 5, fontSize: 12 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { width: '85%', backgroundColor: '#1A1A1A', borderRadius: 30, padding: 30, alignItems: 'center', borderWidth: 1, borderColor: '#333' },
+  modalTitle: { color: 'white', fontSize: 28, fontWeight: 'bold', marginVertical: 15 },
+  modalText: { color: '#AAA', textAlign: 'center', fontSize: 16, marginBottom: 25 },
+  primaryBtn: { backgroundColor: '#00E5FF', width: '100%', padding: 15, borderRadius: 15, alignItems: 'center' },
+  primaryBtnText: { color: 'black', fontWeight: 'bold', fontSize: 18 },
+  iconBtn: { padding: 5 },
+  disabledBtn: {
+  opacity: 0.5,
+},
 });
 
 export default SudokuGame;

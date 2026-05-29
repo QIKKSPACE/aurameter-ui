@@ -38,7 +38,7 @@ chatId
 }) => {
 
   const currently_active_chat_id=useSelector((state)=>state.chats.currently_active_chat_id)
-
+  
   /* ───────── shared values ───────── */
   const entranceY = useSharedValue(HIDDEN_Y);
   const translateX = useSharedValue(0);
@@ -159,7 +159,7 @@ chatId
               <View style={styles.textContainer}>
                 <Text style={styles.username}>{username}</Text>
                 <Text style={styles.message} numberOfLines={2}>
-                  {message}
+{message?.trim() ? message : "Sent a new message"}
                 </Text>
               </View>
             </View>

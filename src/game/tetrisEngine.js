@@ -1,27 +1,17 @@
 /**
  * Tetris Game Engine
  * ------------------
- * Pure logic layer.
- * No UI. No animations.
+ * Pure game logic for movement, collision, line clears, and piece spawning.
  */
-
-import {
-  setBoard,
-  setCurrentPiece,
-  setNextPiece,
-  clearLines,
-  gameOver,
-} from "../store/tetrisGameSlice";
 
 /**
  * Board constants
  */
 export const BOARD_WIDTH = 10;
-export const BOARD_HEIGHT = 20;
+export const BOARD_HEIGHT = 24;
 
 /**
  * Tetromino definitions
- * Each piece = matrix + color
  */
 export const TETROMINOS = {
   I: {
@@ -76,9 +66,6 @@ export const TETROMINOS = {
 
 const TETROMINO_KEYS = Object.keys(TETROMINOS);
 
-/**
- * Helpers
- */
 export const createEmptyBoard = () =>
   Array.from({ length: BOARD_HEIGHT }, () =>
     Array(BOARD_WIDTH).fill(0)
@@ -98,9 +85,35 @@ const randomTetromino = () => {
   };
 };
 
-/**
- * Collision detection
- */
+export const createNewPiece = () => randomTetromino();
+
+export const resetPiecePosition = (piece) => {
+  if (!piece) return null;
+  return {
+    ...piece,
+    x: Math.floor(BOARD_WIDTH / 2) - Math.ceil(piece.shape[0].length / 2),
+    y: 0,
+  };
+};
+
+export const getPieceCells = (piece) => {
+  if (!piece) return [];
+
+  const cells = [];
+  piece.shape.forEach((row, rowIndex) => {
+    row.forEach((cell, colIndex) => {
+      if (!cell) return;
+      cells.push({
+        x: piece.x + colIndex,
+        y: piece.y + rowIndex,
+        color: piece.color,
+      });
+    });
+  });
+
+  return cells;
+};
+
 export const hasCollision = (board, piece, offsetX = 0, offsetY = 0) => {
   const { shape, x, y } = piece;
 
@@ -111,16 +124,10 @@ export const hasCollision = (board, piece, offsetX = 0, offsetY = 0) => {
       const newX = x + col + offsetX;
       const newY = y + row + offsetY;
 
-      // Wall / floor
-      if (
-        newX < 0 ||
-        newX >= BOARD_WIDTH ||
-        newY >= BOARD_HEIGHT
-      ) {
+      if (newX < 0 || newX >= BOARD_WIDTH || newY >= BOARD_HEIGHT) {
         return true;
       }
 
-      // Board collision
       if (newY >= 0 && board[newY][newX]) {
         return true;
       }
@@ -130,16 +137,68 @@ export const hasCollision = (board, piece, offsetX = 0, offsetY = 0) => {
   return false;
 };
 
-/**
- * Merge piece into board
- */
-const mergePiece = (board, piece) => {
+const rotateMatrix = (matrix) =>
+  matrix[0].map((_, i) => matrix.map(row => row[i]).reverse());
+
+export const rotatePiece = (board, piece) => {
+  const rotated = { ...piece, shape: rotateMatrix(piece.shape) };
+  const kicks = [0, -1, 1, -2, 2];
+
+  for (const kick of kicks) {
+    const kicked = { ...rotated, x: rotated.x + kick };
+    if (!hasCollision(board, kicked, 0, 0)) {
+      return kicked;
+    }
+  }
+
+  return piece;
+};
+
+export const movePiece = (board, piece, direction) => {
+  const dx = direction === "left" ? -1 : 1;
+  const moved = { ...piece, x: piece.x + dx };
+  return hasCollision(board, moved, 0, 0) ? piece : moved;
+};
+
+export const softDropPiece = (board, piece) => {
+  const dropped = { ...piece, y: piece.y + 1 };
+  if (!hasCollision(board, dropped, 0, 0)) {
+    return { piece: dropped, locked: false };
+  }
+
+  return { piece, locked: true };
+};
+
+export const hardDropPiece = (board, piece) => {
+  let distance = 0;
+  while (!hasCollision(board, piece, 0, distance + 1)) {
+    distance += 1;
+  }
+
+  return { ...piece, y: piece.y + distance };
+};
+
+export const getGhostPiece = (board, piece) => {
+  if (!piece) return null;
+  return hardDropPiece(board, piece);
+};
+
+export const mergePiece = (board, piece) => {
   const newBoard = board.map(row => [...row]);
 
-  piece.shape.forEach((row, y) => {
-    row.forEach((cell, x) => {
+  piece.shape.forEach((row, rowIndex) => {
+    row.forEach((cell, colIndex) => {
       if (cell) {
-        newBoard[piece.y + y][piece.x + x] = piece.color;
+        const targetY = piece.y + rowIndex;
+        const targetX = piece.x + colIndex;
+        if (
+          targetY >= 0 &&
+          targetY < BOARD_HEIGHT &&
+          targetX >= 0 &&
+          targetX < BOARD_WIDTH
+        ) {
+          newBoard[targetY][targetX] = piece.color;
+        }
       }
     });
   });
@@ -147,121 +206,44 @@ const mergePiece = (board, piece) => {
   return newBoard;
 };
 
-/**
- * Clear full lines
- */
-const clearFullLines = (board) => {
-  const newBoard = board.filter(
-    row => row.some(cell => !cell)
-  );
+export const clearFullLines = (board) => {
+  const filtered = board.filter(row => row.some(cell => !cell));
+  const cleared = BOARD_HEIGHT - filtered.length;
 
-  const cleared = BOARD_HEIGHT - newBoard.length;
-
-  while (newBoard.length < BOARD_HEIGHT) {
-    newBoard.unshift(Array(BOARD_WIDTH).fill(0));
+  while (filtered.length < BOARD_HEIGHT) {
+    filtered.unshift(Array(BOARD_WIDTH).fill(0));
   }
 
-  return { newBoard, cleared };
+  return { newBoard: filtered, cleared };
 };
 
-/**
- * Rotate matrix (clockwise)
- */
-const rotateMatrix = (matrix) => {
-  return matrix[0].map((_, i) =>
-    matrix.map(row => row[i]).reverse()
-  );
+export const getFullLineIndexes = (board) =>
+  board
+    .map((row, index) => (row.every(Boolean) ? index : -1))
+    .filter(index => index !== -1);
+
+export const removeLines = (board, lineIndexes) => {
+  if (!lineIndexes.length) {
+    return { newBoard: board, cleared: 0 };
+  }
+
+  const clearing = new Set(lineIndexes);
+  const filtered = board.filter((_, index) => !clearing.has(index));
+
+  while (filtered.length < BOARD_HEIGHT) {
+    filtered.unshift(Array(BOARD_WIDTH).fill(0));
+  }
+
+  return { newBoard: filtered, cleared: lineIndexes.length };
 };
 
-/**
- * ENGINE ACTIONS
- * These are called by gestures or gravity timer
- */
+export const spawnPiece = (board, nextPiece) => {
+  const piece = nextPiece || createNewPiece();
+  const upcoming = createNewPiece();
 
-export const spawnPiece = (dispatch, getState) => {
-  const state = getState().tetrisGame;
-  const board = state.board;
-
-  const piece = state.nextPiece || randomTetromino();
-  const next = randomTetromino();
-
-  // Game over check
   if (hasCollision(board, piece, 0, 0)) {
-    dispatch(gameOver());
-    return;
+    return { gameOver: true, piece: null, nextPiece: upcoming };
   }
 
-  dispatch(setCurrentPiece(piece));
-  dispatch(setNextPiece(next));
-};
-
-export const movePiece = (direction) => (dispatch, getState) => {
-  const { board, currentPiece, status } = getState().tetrisGame;
-  if (!currentPiece || status !== "playing") return;
-
-  const dx = direction === "left" ? -1 : 1;
-
-  if (!hasCollision(board, currentPiece, dx, 0)) {
-    dispatch(
-      setCurrentPiece({ ...currentPiece, x: currentPiece.x + dx })
-    );
-  }
-};
-
-export const rotatePiece = () => (dispatch, getState) => {
-  const { board, currentPiece, status } = getState().tetrisGame;
-  if (!currentPiece || status !== "playing") return;
-
-  const rotated = rotateMatrix(currentPiece.shape);
-
-  const testPiece = {
-    ...currentPiece,
-    shape: rotated,
-  };
-
-  if (!hasCollision(board, testPiece, 0, 0)) {
-    dispatch(setCurrentPiece(testPiece));
-  }
-};
-
-export const dropPiece = () => (dispatch, getState) => {
-  const { board, currentPiece, status } = getState().tetrisGame;
-  if (!currentPiece || status !== "playing") return;
-
-  if (!hasCollision(board, currentPiece, 0, 1)) {
-    dispatch(
-      setCurrentPiece({ ...currentPiece, y: currentPiece.y + 1 })
-    );
-  } else {
-    // Lock piece
-    const mergedBoard = mergePiece(board, currentPiece);
-    const { newBoard, cleared } = clearFullLines(mergedBoard);
-
-    dispatch(setBoard(newBoard));
-    if (cleared > 0) {
-      dispatch(clearLines(cleared));
-    }
-
-    dispatch(setCurrentPiece(null));
-    spawnPiece(dispatch, getState);
-  }
-};
-
-export const hardDrop = () => (dispatch, getState) => {
-  const { board, currentPiece } = getState().tetrisGame;
-  if (!currentPiece) return;
-
-  let offset = 0;
-  while (!hasCollision(board, currentPiece, 0, offset + 1)) {
-    offset++;
-  }
-
-  dispatch(
-    setCurrentPiece({
-      ...currentPiece,
-      y: currentPiece.y + offset,
-    })
-  );
-
-  dispatch(dropPiece());
+  return { gameOver: false, piece, nextPiece: upcoming };
 };

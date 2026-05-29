@@ -54,7 +54,9 @@ const Login = ({ navigation }) => {
       }, 3000);
     });
   };
-
+const deviceId = useSelector(
+  state => state.device.deviceId
+);
   const handleLogin = async () => {
     Keyboard.dismiss();
     if (!username || !password) {
@@ -64,10 +66,11 @@ const Login = ({ navigation }) => {
 
     setLoading(true);
     try {
-      const response = await fetch("https://api.aurameter.in/auth/login", {
+      console.log("Logging in with:", { username, password, deviceId });
+      const response = await fetch("http://localhost:5001/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: username, password,deviceId:user?.deviceId }),
+        body: JSON.stringify({ email: username, password, deviceId }),
       });
 
       const data = await response.json();

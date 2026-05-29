@@ -83,6 +83,10 @@ export const useSnakeGame = () => {
   const submissionStateRef = useRef<'idle' | 'pending' | 'success'>('idle');
   const countdownTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeCountdownTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const currentDirectionRef = useRef<Direction>(gameState.direction);
+
+  // Update direction ref every render to always have latest direction
+  currentDirectionRef.current = gameState.direction;
 
   const clearCountdownTimer = useCallback(() => {
     // Clear all tracked countdown timeouts - prevents memory leaks on unmount
@@ -205,6 +209,9 @@ export const useSnakeGame = () => {
 
         // Read pending direction from ref (always fresh, no stale closure)
         const pending = pendingDirectionRef.current;
+        // Clear the ref INSIDE the functional update — BEFORE using it
+        // This ensures the direction is always applied before being cleared
+        pendingDirectionRef.current = null;
         let requestedDirection = pending ?? currentState.direction;
         
         if (requestedDirection === getOppositeDirection(currentState.direction)) {
@@ -344,8 +351,6 @@ export const useSnakeGame = () => {
           obstacles: nextObstacles,
         };
       });
-
-      pendingDirectionRef.current = null;
     }, tickSpeed);
 
     return () => clearInterval(interval);
@@ -400,13 +405,13 @@ export const useSnakeGame = () => {
 
   const setDirection = useCallback(
     (direction: Direction) => {
-      const baseDirection = pendingDirectionRef.current ?? gameState.direction;
+      const baseDirection = pendingDirectionRef.current ?? currentDirectionRef.current;
       if (direction === getOppositeDirection(baseDirection)) {
         return;
       }
       pendingDirectionRef.current = direction;
     },
-    [gameState.direction],
+    [],
   );
 
   const restartGame = useCallback(() => {

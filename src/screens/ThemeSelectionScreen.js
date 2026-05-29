@@ -18,6 +18,7 @@ import LinearGradient from "react-native-linear-gradient";
 import AppText from "../components/AppText";
 import MaterialIcon from "react-native-vector-icons/MaterialCommunityIcons";
 import api from "../services/api";
+import { isThemeUnlocked } from "../constants/themeLocks";
 
 // 🔹 Stable preview component
 const ThemePreview = React.memo(({ background }) => {
@@ -39,27 +40,34 @@ const ThemePreview = React.memo(({ background }) => {
 });
 
 // 🔹 Memoized theme card
-const RenderThemeItem = React.memo(({ item, isActive, onPress, theme }) => (
+const RenderThemeItem = React.memo(({ item, isActive, onPress, theme }) => {
+  const isUnlocked = isThemeUnlocked(item.id);
+
+  return (
   <TouchableOpacity
     style={[
       styles.card,
       { backgroundColor: theme.components.card, opacity: theme.opacity.light },
       isActive && styles.activeCard,
+      !isUnlocked && styles.lockedCard,
     ]}
-onPress={() => onPress(item.id)}
+    onPress={() => onPress(item.id)}
   >
     <ThemePreview background={item.background} />
     <View style={{ flex: 1 }}>
       <AppText variant="h4" style={[styles.themeName, { color: theme.text.primary }]}>{item.name}</AppText>
       <AppText variant="body"style={[styles.themeId, { color: theme.text.secondary }]}>{item.id.toUpperCase()}</AppText>
     </View>
-    {isActive ? (
+    {!isUnlocked ? (
+      <MaterialIcon name="lock-outline" size={22} color={theme.text.secondary} />
+    ) : isActive ? (
       <Icon name="check-circle" size={22} color={theme.text.accent} />
     ) : (
       <Icon name="circle" size={22} color={theme.text.secondary} />
     )}
   </TouchableOpacity>
-));
+  );
+});
 
 const TABS = ["General", "Basic", "Premium"];
 
@@ -76,6 +84,9 @@ const ThemeSelectionScreen = ({navigation}) => {
     }, {});
   }, []);
  const applyTheme = async (selectedThemeId) => {
+  if (!isThemeUnlocked(selectedThemeId)) {
+    return;
+  }
   try {
     // 1️⃣ Update UI immediately
     setTheme(selectedThemeId);
@@ -199,6 +210,9 @@ const styles = StyleSheet.create({
   activeCard: {
     borderWidth: 2,
     borderColor: "#00E5FF",
+  },
+  lockedCard: {
+    opacity: 0.6,
   },
   previewBox: {
     width: 32,

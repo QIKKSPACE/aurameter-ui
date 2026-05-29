@@ -8,8 +8,18 @@ import { View, StyleSheet } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 
 const AnimatedBackground = ({ theme }) => {
+    const firstColor = Array.isArray(theme.bgGradient)
+        ? theme.bgGradient[0]
+        : '#121212'
+
     return (
-        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <View
+            style={[
+                StyleSheet.absoluteFill,
+                { backgroundColor: firstColor },
+            ]}
+            pointerEvents="none"
+        >
             <LinearGradient
                 colors={theme.bgGradient}
                 style={StyleSheet.absoluteFill}

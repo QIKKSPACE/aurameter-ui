@@ -5,14 +5,17 @@ import {initiateLogout} from './logoutService'
 let isRefreshing = false;
 let failedQueue = [];
 let lastRefreshAt = 0;
-
+   
 const processQueue = (error, token = null) => {
   failedQueue.forEach(p => error ? p.reject(error) : p.resolve(token));
   failedQueue = [];
 };
        
 export async function ensureFreshToken(force = false) {
-  const { user } = store.getState();
+  const state = store.getState();
+
+const user = state.user;
+const deviceId = state.device.deviceId;
   const now = Date.now();
 if (user?.isLoggingOut) {
   throw new Error("Logout in progress");
@@ -32,7 +35,7 @@ if (user?.isLoggingOut) {
     isRefreshing = true;
     store.dispatch(refreshStarted());
 
-    const data = await refreshWithToken(user.refreshToken,user.deviceId);
+    const data = await refreshWithToken(user.refreshToken, deviceId);
 
     store.dispatch(refreshSucceeded({
       token: data.accessToken,

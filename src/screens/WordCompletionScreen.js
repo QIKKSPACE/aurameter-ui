@@ -1,5 +1,4 @@
-import { useNavigation } from '@react-navigation/native';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,326 +6,723 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   ScrollView,
+  Animated,
+  Modal,
+  Dimensions,
+  StatusBar,
+  KeyboardAvoidingView,
+  Platform,
+  Alert
 } from 'react-native';
-import Icon from "react-native-vector-icons/Ionicons";
+import { useNavigation } from '@react-navigation/native';
+import Icon from 'react-native-vector-icons/Ionicons';
+import { useDispatch, useSelector } from 'react-redux';
+import {
+  completeLevel,
+  selectWordGameCurrentLevel,
+  selectWordGameMaxLevel,
+  selectWordGamePoints,
+  collectReward,
+} from '../store/wordGameSlice';
 
-const WORD_LENGTH = 6;
+import LinearGradient from 'react-native-linear-gradient';
+import api from '../services/api';
+import { useToast } from '../constants/context/ErrorContext';
+import { updateUserData } from '../store/userSlice';
+
+const { width } = Dimensions.get('window');
+
+const wordData = require('../assets/word.json');
 
 const WordCompletionScreen = () => {
-  const [originalWord, setOriginalWord] = useState('');
-  const [maskedWord, setMaskedWord] = useState([]);
-  const [userInput, setUserInput] = useState([]);
-  const [score, setScore] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [feedback, setFeedback] = useState('');
-  const [answerShown, setAnswerShown] = useState(false);
-  const [wordInfo, setWordInfo] = useState(null); // NEW
   const navigation = useNavigation();
+  const dispatch = useDispatch();
+const { showToast } = useToast();
+
+  const currentLevel = useSelector(selectWordGameCurrentLevel);
+  const maxLevel = useSelector(selectWordGameMaxLevel);
+  const points = useSelector(selectWordGamePoints);
+
+  const [levelData, setLevelData] = useState(null);
+  const [userInput, setUserInput] = useState([]);
+  const [feedback, setFeedback] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [wordInfo, setWordInfo] = useState(null);
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
+const user=useSelector(state=>state.user)
+  const inputRefs = useRef([]);
 
   useEffect(() => {
-    fetchNewWord();
-  }, []);
+    loadLevel(currentLevel);
+  }, [currentLevel]);
 
-  const fetchNewWord = async () => {
+  const loadLevel = (level) => {
     setLoading(true);
     setFeedback('');
-    setAnswerShown(false);
-    setWordInfo(null); // Clear old wordInfo
+    setWordInfo(null);
 
-    try {
-      const response = await fetch(`https://api.datamuse.com/words?sp=${'?'.repeat(WORD_LENGTH)}&max=50`);
-      const data = await response.json();
-      const filtered = data.filter(word => /^[a-z]+$/.test(word.word));
-      const randomWord = filtered[Math.floor(Math.random() * filtered.length)]?.word.toLowerCase();
+    const data = wordData.find(item => item.Level === level);
 
-      if (!randomWord || randomWord.length !== WORD_LENGTH) {
-        fetchNewWord();
-        return;
-      }
-
-      const indexesToHide = new Set();
-      while (indexesToHide.size < 2 + Math.floor(Math.random() * 2)) {
-        indexesToHide.add(Math.floor(Math.random() * WORD_LENGTH));
-      }
-
-      const masked = randomWord.split('').map((char, index) =>
-        indexesToHide.has(index) ? '' : char
-      );
-
-      setOriginalWord(randomWord);
-      setMaskedWord(masked);
-      setUserInput(masked);
-    } catch (e) {
-      Alert.alert('Error', 'Failed to load word');
-    } finally {
+    if (!data) {
       setLoading(false);
+      return;
     }
+
+    setLevelData(data);
+
+    const initialInput = data.Hint.split('').map(char =>
+      char === '_' ? '' : char,
+    );
+
+    setUserInput(initialInput);
+
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 700,
+        useNativeDriver: false,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 6,
+        useNativeDriver: false,
+      }),
+    ]).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowAnim, {
+          toValue: 1,
+          duration: 1800,
+          useNativeDriver: false,
+        }),
+        Animated.timing(glowAnim, {
+          toValue: 0,
+          duration: 1800,
+          useNativeDriver: false,
+        }),
+      ]),
+    ).start();
+
+    setLoading(false);
   };
 
   const handleInput = (value, index) => {
     const newInput = [...userInput];
     newInput[index] = value.toLowerCase();
     setUserInput(newInput);
-  };
 
-  const checkAnswer = () => {
-    if (answerShown) return;
+    if (value && index < levelData.Hint.length - 1) {
+      let nextIndex = -1;
 
-    const attempt = userInput.join('');
-    if (attempt === originalWord) {
-      setScore(score + 1);
-      setFeedback('✅ Correct!');
-      setTimeout(fetchNewWord, 1000);
-    } else {
-      setFeedback('❌ Try again!');
+      for (let i = index + 1; i < levelData.Hint.length; i++) {
+        if (levelData.Hint[i] === '_') {
+          nextIndex = i;
+          break;
+        }
+      }
+
+      if (nextIndex !== -1) {
+        inputRefs.current[nextIndex]?.focus();
+      }
     }
   };
 
-  const showAnswer = async () => {
-    setUserInput(originalWord.split(''));
-    setFeedback(`📘 Answer: ${originalWord}`);
-    setAnswerShown(true);
-    await fetchWordInfo(originalWord); // Fetch info about word
+  const triggerShake = () => {
+    shakeAnim.setValue(0);
+
+    Animated.sequence([
+      Animated.timing(shakeAnim, {
+        toValue: 10,
+        duration: 50,
+        useNativeDriver: false,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: -10,
+        duration: 50,
+        useNativeDriver: false,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: 8,
+        duration: 50,
+        useNativeDriver: false,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: 0,
+        duration: 50,
+        useNativeDriver: false,
+      }),
+    ]).start();
   };
 
-  const fetchWordInfo = async (word) => {
+  const fetchWordInfo = async word => {
     try {
-      const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
+      const response = await fetch(
+        `https://api.dictionaryapi.dev/api/v2/entries/en/${word}`,
+      );
+
       const data = await response.json();
+
       if (Array.isArray(data) && data.length > 0) {
         const entry = data[0];
         const meaningObj = entry.meanings?.[0]?.definitions?.[0];
 
-        const synonyms = meaningObj?.synonyms || [];
-        const antonyms = meaningObj?.antonyms || [];
-        const definition = meaningObj?.definition || 'No definition found.';
-
         setWordInfo({
-          definition,
-          synonyms,
-          antonyms,
-        });
-      } else {
-        setWordInfo({
-          definition: 'No definition found.',
-          synonyms: [],
-          antonyms: [],
+          definition:
+            meaningObj?.definition || 'No definition available.',
+          partOfSpeech: entry.meanings?.[0]?.partOfSpeech || '',
         });
       }
-    } catch (error) {
-      console.error(error);
-      setWordInfo({
-        definition: 'Failed to fetch definition.',
-        synonyms: [],
-        antonyms: [],
-      });
+    } catch (e) {
+      console.log(e);
     }
   };
 
-  const renderInputs = () =>
-    userInput.map((letter, index) => (
-      <TextInput
-        key={index}
-        style={[
-          styles.letterInput,
-          maskedWord[index] === '' ? styles.editable : styles.fixed,
-        ]}
-        value={letter}
-        maxLength={1}
-        editable={!answerShown && maskedWord[index] === ''}
-        onChangeText={(val) => handleInput(val, index)}
-        autoCapitalize="none"
-      />
-    ));
+  const checkAnswer = async () => {
+    const attempt = userInput.join('');
+
+    if (attempt === levelData.Word) {
+      setFeedback('PERFECT ✨');
+      
+      setTimeout(() => {
+        dispatch(completeLevel(currentLevel));
+      }, 1000);
+    } else {
+      setFeedback('TRY AGAIN');
+      triggerShake();
+    }
+  };
+
+  const handleHint = async () => {
+    if (levelData && levelData.Word) {
+      await fetchWordInfo(levelData.Word);
+    }
+  };
+
+  const renderInputs = () => {
+    return userInput.map((letter, index) => {
+      const isFixed = levelData.Hint[index] !== '_';
+
+      return (
+        <Animated.View
+          key={index}
+          style={{
+            transform: [{ translateX: shakeAnim }],
+          }}
+        >
+          <TextInput
+            ref={el => (inputRefs.current[index] = el)}
+            style={[
+              styles.input,
+              isFixed ? styles.fixedInput : styles.editableInput,
+            ]}
+            value={letter}
+            editable={!isFixed}
+            maxLength={1}
+            autoCapitalize="none"
+            onChangeText={val => handleInput(val, index)}
+          />
+        </Animated.View>
+      );
+    });
+  };
+
+  if (loading) {
+    return (
+      <LinearGradient
+        colors={['#020617', '#0F172A']}
+        style={styles.loaderContainer}
+      >
+        <ActivityIndicator size="large" color="#8B5CF6" />
+      </LinearGradient>
+    );
+  }
 
   return (
-    <ScrollView contentContainerStyle={styles.container} nestedScrollEnabled={true}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Icon name="arrow-back" size={24} color="#00E5FF" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}> Word Completion</Text>
-      </View>
+    <LinearGradient
+      colors={['#020617', '#0F172A', '#111827']}
+      style={styles.container}
+    >
+      <StatusBar barStyle="light-content" />
 
-      <Text style={styles.subtitle}>Score: {score}</Text>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* HEADER */}
 
-      {loading ? (
-        <ActivityIndicator color="#00E5FF" size="large" />
-      ) : (
-        <View style={styles.wordContainer}>{renderInputs()}</View>
-      )}
+          <View style={styles.header}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => navigation.goBack()}
+            >
+              <Icon name="chevron-back" size={24} color="#fff" />
+            </TouchableOpacity>
 
-      <Text style={styles.feedback}>{feedback}</Text>
+            <View>
+              <Text style={styles.headerSmall}>WORD MASTER</Text>
+              <Text style={styles.headerTitle}>Elite Puzzle</Text>
+            </View>
 
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+             
 
-      {wordInfo && (
-        <View style={styles.infoContainer}>
-          <Text style={styles.infoTitle}>📚 Meaning:</Text>
-          <Text style={styles.infoText}>{wordInfo.definition}</Text>
-          {wordInfo?.partOfSpeech?
-          <>
-            <Text style={styles.infoTitle}>📚 Part Of Speech:</Text>
-            <Text style={styles.infoText}>{wordInfo?.partOfSpeech}</Text>
-          </>
-          :""
-        
-}
-          {wordInfo.synonyms.length > 0 && (
-            <>
-              <Text style={styles.infoTitle}>🔵 Synonyms:</Text>
-              <Text style={styles.infoText}>{wordInfo.synonyms.join(', ')}</Text>
-            </>
-          )}
+              <View style={[styles.levelPill, { backgroundColor: '#F59E0B' }]}>
+                <Text style={styles.levelPillText}>
+                  {points} PTS
+                </Text>
+              </View>
 
-          {wordInfo.antonyms.length > 0 && (
-            <>
-              <Text style={styles.infoTitle}>🔴 Antonyms:</Text>
-              <Text style={styles.infoText}>{wordInfo.antonyms.join(', ')}</Text>
-            </>
-          )}
-        </View>
-      )}
-      
-      <View style={styles.buttonRow}>
-        <TouchableOpacity style={styles.button} onPress={checkAnswer} disabled={loading || answerShown}>
-          <Text style={styles.buttonText}>Submit</Text>
-        </TouchableOpacity>
+              <TouchableOpacity
+                activeOpacity={0.8}
+               onPress={async () => {
+  if (points <= 0) {
+    Alert.alert(
+      'No Points',
+      'Complete more levels to earn points!',
+    );
 
-        <TouchableOpacity style={styles.secondaryButton} onPress={showAnswer} disabled={loading || answerShown}>
-          <Text style={styles.secondaryButtonText}>Show Answer</Text>
-        </TouchableOpacity>
+    return;
+  }
 
-        <TouchableOpacity style={styles.secondaryButton} onPress={fetchNewWord} disabled={loading}>
-          <Text style={styles.secondaryButtonText}>Refresh</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+  try {
+    const response = await api.post(
+      '/game/word-game',
+      {
+        level: maxLevel,
+        aura: points,
+      },
+    );
+
+    if (response?.data?.success) {
+      dispatch(collectReward());
+      dispatch(
+    updateUserData({
+      aura:
+        (user?.userData?.aura || 0) + points,
+    })
+  );
+showToast( `You claimed ${points} points.`, "success");
+    }
+  } catch (err) {
+    console.log(
+      'Claim reward error:',
+      err?.response?.data || err.message,
+    );
+showToast("Failed to Claim  Aura, Try again", "error");
+  }
+}}
+                style={{ padding: 6, backgroundColor: '#10B981', borderRadius: 20 }}
+              >
+                <Icon name="gift" size={20} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* MAIN CARD */}
+
+          <Animated.View
+            style={[
+              styles.mainCard,
+              {
+                opacity: fadeAnim,
+                transform: [{ scale: scaleAnim }],
+                borderColor: glowAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ['rgba(139,92,246,0.2)', '#8B5CF6'],
+                }),
+              },
+            ]}
+          >
+            <LinearGradient
+              colors={[
+                'rgba(139,92,246,0.12)',
+                'rgba(59,130,246,0.08)',
+              ]}
+              style={styles.cardGlow}
+            />
+            
+            <View style={styles.topBadge}>
+               <View style={styles.levelPill}>
+                <Text style={styles.levelPillText}>
+                  LVL {currentLevel}  
+                </Text>
+              </View>
+              
+            </View>
+
+            
+
+            <Text style={styles.difficulty}>
+              {levelData.Tier.toUpperCase()}
+            </Text>
+
+            {/* INPUTS */}
+
+          <ScrollView
+  horizontal
+  showsHorizontalScrollIndicator={false}
+  contentContainerStyle={styles.wordContainer}
+>
+  {renderInputs()}
+</ScrollView>
+            {!!feedback && (
+              <Text style={styles.feedback}>{feedback}</Text>
+            )}
+
+            {/* BUTTONS */}
+
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={handleHint}
+              style={[styles.playButtonWrapper, { marginBottom: 12 }]}
+            >
+              <LinearGradient
+                colors={['#10B981', '#059669']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.playButton}
+              >
+                <Icon
+                  name="help-buoy"
+                  size={22}
+                  color="#fff"
+                />
+                <Text style={styles.playButtonText}>
+                  HINT
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={checkAnswer}
+              style={styles.playButtonWrapper}
+            >
+              <LinearGradient
+                colors={['#8B5CF6', '#6366F1']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.playButton}
+              >
+                <Icon
+                  name="sparkles"
+                  size={22}
+                  color="#fff"
+                />
+                <Text style={styles.playButtonText}>
+                  VERIFY ANSWER
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            {/* INFO */}
+
+            {wordInfo && (
+              <View style={styles.infoCard}>
+                <Text style={styles.infoTitle}>
+                  WORD INSIGHT
+                </Text>
+
+                <Text style={styles.infoDefinition}>
+                  {wordInfo.definition}
+                </Text>
+
+                {!!wordInfo.partOfSpeech && (
+                  <View style={styles.partBadge}>
+                    <Text style={styles.partBadgeText}>
+                      {wordInfo.partOfSpeech}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+          </Animated.View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* REWARD MODAL */}
+
+    
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    flexGrow: 1,
-    backgroundColor: '#0D1B2A',
-    alignItems: 'center',
+    flex: 1,
+  },
+
+  loaderContainer: {
+    flex: 1,
     justifyContent: 'center',
-    padding: 20,
-    paddingTop: 80,
+    alignItems: 'center',
   },
-  title: {
-    fontSize: 28,
-    color: '#00E5FF',
-    fontWeight: 'bold',
-    marginBottom: 10,
+
+  scroll: {
+    paddingHorizontal: 20,
+    paddingTop: 60,
+    paddingBottom: 50,
   },
-  subtitle: {
-    fontSize: 18,
-    color: '#E5E5E5',
+
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 30,
   },
-  wordContainer: {
-    flexDirection: 'row',
-    marginBottom: 20,
-    justifyContent: 'center',
-    gap: 4,
-  },
-  letterInput: {
-    width: 45,
-    height: 50,
-    textAlign: 'center',
-    fontSize: 24,
-    fontWeight: 'bold',
-    borderRadius: 8,
-    borderWidth: 2,
-    color: '#fff',
-    backgroundColor: '#1B263B',
-    borderColor: '#00E5FF',
-  },
-  editable: {
-    borderColor: '#FFD700',
-  },
-  fixed: {
-    backgroundColor: '#1B263B',
-    color: '#00FF7F',
-  },
-  feedback: {
-    fontSize: 20,
-    marginVertical: 10,
-    color: '#FFD700',
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 20,
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-  },
-  button: {
-    backgroundColor: '#00E5FF',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    elevation: 5,
-  },
-  buttonText: {
-    color: '#0D1B2A',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  secondaryButton: {
-    backgroundColor: '#1B263B',
-    borderWidth: 1.5,
-    borderColor: '#00E5FF',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-  },
-  secondaryButtonText: {
-    color: '#00E5FF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  header: {
-    flexDirection: "row",
-    position: 'absolute',
-    top: 0,
-    marginBottom: 20,
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    textAlign: 'left',
-    width: '100%',
-    padding: 20,
-  },
-  headerTitle: {
-    color: "#00E5FF",
-    fontSize: 20,
-    fontWeight: "bold",
-    marginLeft: 15,
-  },
-  infoContainer: {
 
-    marginTop: 30,
-    backgroundColor: '#1B263B',
-    borderRadius: 10,
-    padding: 20,
-    borderColor: '#00E5FF',
+  backButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+
+  headerSmall: {
+    color: '#94A3B8',
+    fontSize: 12,
+    letterSpacing: 2,
+  },
+
+  headerTitle: {
+    color: '#fff',
+    fontSize: 26,
+    fontWeight: '800',
+    marginTop: 3,
+  },
+
+  levelPill: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 50,
+    backgroundColor: 'rgba(139,92,246,0.2)',
     borderWidth: 1,
-    width: '100%',
+    borderColor: '#8B5CF6',
   },
-  infoTitle: {
-    fontSize: 18,
-    color: '#00E5FF',
-    fontWeight: 'bold',
-    marginBottom: 5,
+
+  levelPillText: {
+    color: '#fff',
+    fontWeight: '700',
   },
-  infoText: {
+
+  mainCard: {
+    borderRadius: 34,
+    padding: 28,
+    borderWidth: 1.5,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(15,23,42,0.92)',
+  },
+
+  cardGlow: {
+    ...StyleSheet.absoluteFillObject,
+  },
+
+  topBadge: {
+    flexDirection: 'row',
+    alignSelf: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 50,
+    gap: 8,
+    marginBottom: 24,
+  },
+
+  badgeText: {
+    color: '#fff',
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+
+  category: {
+    color: '#fff',
+    fontSize: 32,
+    textAlign: 'center',
+    fontWeight: '800',
+    marginBottom: 8,
+  },
+
+  difficulty: {
+    color: '#A78BFA',
+    textAlign: 'center',
+    letterSpacing: 3,
+    marginBottom: 35,
+    fontWeight: '700',
+  },
+
+wordContainer:  
+{ flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 12,
+  paddingHorizontal: 10,
+  marginBottom: 28,
+  flexGrow: 1,
+},
+  input: {
+    width: 58,
+    height: 70,
+    borderRadius: 18,
+    textAlign: 'center',
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#fff',
+    borderWidth: 1.5,
+  },
+
+  editableInput: {
+    backgroundColor: '#111827',
+    borderColor: '#374151',
+  },
+
+  fixedInput: {
+    backgroundColor: 'rgba(139,92,246,0.15)',
+    borderColor: '#8B5CF6',
+    color: '#C4B5FD',
+  },
+
+  feedback: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginBottom: 22,
+    letterSpacing: 1,
+  },
+
+  playButtonWrapper: {
+    borderRadius: 22,
+    overflow: 'hidden',
+    marginTop: 8,
+  },
+
+  playButton: {
+    paddingVertical: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 10,
+  },
+
+  playButtonText: {
+    color: '#fff',
+    fontWeight: '800',
     fontSize: 16,
-    color: '#E5E5E5',
-    marginBottom: 10,
+    letterSpacing: 1,
+  },
+
+  infoCard: {
+    marginTop: 30,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 22,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+
+  infoTitle: {
+    color: '#8B5CF6',
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 12,
+  },
+
+  infoDefinition: {
+    color: '#E5E7EB',
+    lineHeight: 24,
+    fontSize: 15,
+  },
+
+  partBadge: {
+    marginTop: 15,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(139,92,246,0.15)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 50,
+  },
+
+  partBadgeText: {
+    color: '#C4B5FD',
+    fontWeight: '700',
+  },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+
+  rewardCard: {
+    width: width * 0.88,
+    borderRadius: 34,
+    overflow: 'hidden',
+    backgroundColor: '#111827',
+  },
+
+  rewardTop: {
+    paddingVertical: 35,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  rewardTitle: {
+    color: '#fff',
+    fontSize: 30,
+    fontWeight: '900',
+    marginTop: 18,
+  },
+
+  rewardSubtitle: {
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 8,
+    fontSize: 16,
+  },
+
+  rewardBody: {
+    padding: 28,
+  },
+
+  rewardBox: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    paddingVertical: 24,
+    borderRadius: 24,
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+
+  rewardAmount: {
+    color: '#10B981',
+    fontSize: 34,
+    fontWeight: '900',
+  },
+
+  claimButton: {
+    paddingVertical: 18,
+    borderRadius: 20,
+    alignItems: 'center',
+  },
+
+  claimButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: 1,
   },
 });
 

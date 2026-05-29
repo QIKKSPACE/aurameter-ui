@@ -6,13 +6,12 @@ import { KENKEN_COLORS, KENKEN_SIZING } from './KenKenColors';
 
 type Props = {
   onUndo: () => void;
-  onPencil: () => void;
   onClear: () => void;
   onRedo: () => void;
-  isPencilMode: boolean;
+  onHint: () => void;
 };
 
-const KenKenActionBarComponent = ({ onUndo, onPencil, onClear, onRedo, isPencilMode }: Props) => {
+const KenKenActionBarComponent = ({ onUndo, onClear, onRedo, onHint }: Props) => {
   const styles = useMemo(() => {
     return StyleSheet.create({
       container: {
@@ -31,9 +30,7 @@ const KenKenActionBarComponent = ({ onUndo, onPencil, onClear, onRedo, isPencilM
         justifyContent: 'center',
         alignItems: 'center',
       },
-      buttonActive: {
-        backgroundColor: '#3A3A4A',
-      },
+
       clearButton: {
         flex: 1,
         height: KENKEN_SIZING.ACTION_BAR_BUTTON_SIZE,
@@ -61,14 +58,6 @@ const KenKenActionBarComponent = ({ onUndo, onPencil, onClear, onRedo, isPencilM
         <Icon name="undo" size={20} color={KENKEN_COLORS.ACTION_BUTTON_ICON} />
       </TouchableOpacity>
 
-      <TouchableOpacity
-        activeOpacity={0.7}
-        onPress={onPencil}
-        style={[styles.button, isPencilMode && styles.buttonActive]}
-      >
-        <Icon name="pencil" size={20} color={KENKEN_COLORS.ACTION_BUTTON_ICON} />
-      </TouchableOpacity>
-
       <TouchableOpacity activeOpacity={0.7} onPress={onClear} style={styles.clearButton}>
         <Icon name="format-list-bulleted-square" size={16} color={KENKEN_COLORS.ACTION_BUTTON_ICON} />
         <AppText style={styles.clearButtonText}>CLEAR</AppText>
@@ -76,6 +65,10 @@ const KenKenActionBarComponent = ({ onUndo, onPencil, onClear, onRedo, isPencilM
 
       <TouchableOpacity activeOpacity={0.7} onPress={onRedo} style={styles.button}>
         <Icon name="redo" size={20} color={KENKEN_COLORS.ACTION_BUTTON_ICON} />
+      </TouchableOpacity>
+
+      <TouchableOpacity activeOpacity={0.7} onPress={onHint} style={styles.button}>
+        <Icon name="lightbulb" size={20} color={KENKEN_COLORS.ACTION_BUTTON_ICON} />
       </TouchableOpacity>
     </View>
   );

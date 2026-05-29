@@ -39,7 +39,13 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 4,
     borderRadius: 4,
   },
-
+promoBanner: {
+  width: "90%",
+  height: 130,
+  borderRadius: 16,
+  marginHorizontal: 16,
+  marginTop: 10,
+},
   logoRow: {
     flexDirection: "row",
     justifyContent: "space-between",

@@ -67,6 +67,15 @@ const [hasError, setHasError] = useState(false);
 const [user, setUser] = useState(null);
 const [zodiac, setZodiac] = useState(null);
 const stopPlayerRef = useRef(null);
+const [achievements, setAchievements] = useState([]);
+const rarityColors = {
+  COMMON: "#9ca3af",
+  RARE: "#3b82f6",
+  EPIC: "#a855f7",
+  LEGENDARY: "#f59e0b",
+};
+
+
 const dispatch=useDispatch()
 useFocusEffect(
 useCallback(() => {
@@ -81,13 +90,34 @@ stopPlayerRef.current();
 );
 
 useEffect(() => {
+  if (!userId) return;
 
-if (!userId) return;
-fetchUser();
+  let profileViewTimeout;
 
-return () => {
-restoreSavedTheme(); // revert original theme
-};
+  const init = async () => {
+    await fetchUser();
+
+    // wait 3 sec before counting profile view
+    profileViewTimeout = setTimeout(async () => {
+      try {
+        await api.post(`/auth/profile_view/${userId}`);
+        console.log("Profile view counted");
+      } catch (err) {
+        console.log("Profile view failed", err?.response?.data || err.message);
+      }
+    }, 3000);
+  };
+
+  init();
+
+  return () => {
+    restoreSavedTheme();
+
+    // clear timer if user leaves early
+    if (profileViewTimeout) {
+      clearTimeout(profileViewTimeout);
+    }
+  };
 }, []);
 
 // Fetch user from backend
@@ -108,6 +138,7 @@ if (fetchedUser?.theme_id) {
 setTemporaryTheme(fetchedUser.theme_id);
 }
 
+setAchievements(res?.data?.achievements || []);
 setIsFetchingUser(false);
 } catch (err) {
 console.log("Failed to load user:", err?.response?.data || err.message);
@@ -126,7 +157,7 @@ const followUnfollow = async () => {
     setIsFollowing(false);
      console.log(res)
     if (res.data.success) {
-      // Toggle the follow state locally
+      // Toggle the follow state locally  
       if(res.data.baseType=="FOLLOW" && res.data.chat){
         dispatch(addNewChat({chat:res.data.chat}))
       }
@@ -152,29 +183,78 @@ const followUnfollow = async () => {
   }
 };
 
-const renderAchievement = ({ item }) => (
-<View
-style={[
-styles.achievementCard,
-{ backgroundColor: theme.components.card },
-]}
->
-<Icon
-name={item.icon}
-size={22}
-color={item.color}
-style={{ marginRight: 10 }}
-/>
-<View style={{ flex: 1 }}>
-<Text style={[styles.achievementName, { color: theme.text.primary }]}>
-{item.title}
-</Text>
-<Text style={[styles.achievementDesc, { color: theme.text.secondary }]}>
-{item.subtitle}
-</Text>
-</View>
-</View>
-);
+const renderAchievement = ({ item, index }) => {
+  const rarityColor = theme.text.background;
+
+  return (
+    <View
+      style={[
+        styles.achievementCard,
+        {
+          backgroundColor: theme.components.box,
+          
+        },
+        theme.background.style !== "image"
+          ? {
+              opacity: theme.opacity.light,
+            }
+          : {},
+      ]}
+    >
+      {/* Glow Accent */}
+      <View
+        style={[
+          styles.achievementGlow,
+          {
+            backgroundColor: rarityColor,
+          },
+        ]}
+      />
+
+      {/* Icon */}
+      <View
+        style={[
+          styles.achievementIconWrapper,
+          {
+            backgroundColor: rarityColor + "22",
+            borderColor: rarityColor + "55",
+          },
+        ]}
+      >
+        <Text style={styles.achievementEmoji}>
+          {item.icon || "🏆"}
+        </Text>
+      </View>
+
+      {/* Content */}
+      <View style={{ flex: 1 }}>
+        <View style={styles.achievementTopRow}>
+          <AppText
+            variant="h4"
+            style={[
+              styles.achievementName,
+              { color: theme.text.primary },
+            ]}
+          >
+            {item.title}
+          </AppText>
+        </View>
+
+        <AppText
+          variant="body"
+          style={[
+            styles.achievementDesc,
+            { color: theme.text.secondary },
+          ]}
+        >
+          {item.description}
+        </AppText>
+
+      
+      </View>
+    </View>
+  );
+};
 
 return (
 <ScreenBackground>
@@ -250,7 +330,7 @@ ListHeaderComponent={
         opacity:theme.opacity.light,padding:4,borderRadius:5
             }:{}
         ]}>
-  <AppText  variant="h4" style={[{ color: theme.text.primary,fontSize:20}]}>
+  <AppText  variant="h4" style={[{ color: theme.text.primary,fontSize:20,textAlign:'center',width:'100%' }]}>
     {user?.name || ""}
   </AppText>
   </View>:""}
@@ -391,7 +471,10 @@ ListHeaderComponent={
     {/* Chat Button */}
     <TouchableOpacity
       style={[styles.vibeBtn, { borderColor: theme.text.accent, paddingHorizontal: 12 }]}
-      onPress={() => navigation.navigate("Chat", { userId: user.id })}
+     onPress={()=>{
+        navigation.navigate("ChatScreen",{chat_id:user?.chat_id,
+          other_user_id:user?.id,other_avatar:user?.avatar,other_username:user?.username})
+      }}
     >
       <Icon
         name="chat"
@@ -417,7 +500,7 @@ ListHeaderComponent={
 >
   <View style={styles.statBox}>
     <AppText style={[ { color: theme.text.primary,fontSize:18 }]} variant="h4">
-      450
+      {user?.total_profile_view || 0}
     </AppText>
     <AppText
       style={[ { color: theme.text.secondary,fontSize:10 }]}
@@ -428,7 +511,7 @@ ListHeaderComponent={
   </View>
   <View style={styles.statBox}>
     <AppText style={[ { color: theme.text.primary,fontSize:18 }]} variant="h4">
-      120
+      {user?.global_rank || 'N/A'}
     </AppText>
     <AppText
       style={[ { color: theme.text.secondary,fontSize:10 }]}
@@ -439,7 +522,7 @@ ListHeaderComponent={
   </View>
   <View style={styles.statBox}>
   <AppText style={[ { color: theme.text.primary,fontSize:18 }]} variant="h4">
-      1
+      {user?.campus_rank || 'N/A'}
     </AppText>
     <AppText
       style={[ { color: theme.text.secondary,fontSize:10 }]}
@@ -501,6 +584,7 @@ width: "95%",
 alignSelf: "center",
 flexDirection: "row",
 alignItems: "center",
+marginBottom:20
 },
 theme.background.style !== "image"
 ? {
@@ -514,7 +598,7 @@ borderRadius: 5,
 ]}
 >
 
-<AppText style={{ color: theme.text.primary, fontSize: 14 }} variant="h3">
+<AppText style={{ color: theme.text.primary, fontSize: 14, }} variant="h3">
 ACHIEVEMENTS
 </AppText>
 <Ionicons
@@ -652,28 +736,7 @@ statLabel: {
 fontSize: 12,
 marginTop: 4,
 },
-achievementTitle: {
-fontSize: 18,
-fontWeight: "700",
-marginTop: 10,
-marginLeft: 10,
-marginBottom: 10,
-},
-achievementCard: {
-flexDirection: "row",
-alignItems: "center",
-borderRadius: 12,
-padding: 12,
-marginBottom: 10,
-},
-achievementName: {
-fontSize: 15,
-fontWeight: "700",
-},
-achievementDesc: {
-fontSize: 12,
-marginTop: 2,
-},
+
 avatarImage: { width: 96, height: 96, borderRadius: 48, marginBottom: 12 },
 avatarWrapper: {
   position: "relative",
@@ -702,5 +765,84 @@ moodOverlay: {
 
 moodEmoji: {
   fontSize: 20,
+},
+achievementCard: {
+  flexDirection: "row",
+  alignItems: "center",
+  borderRadius: 20,
+  padding: 14,
+  marginBottom: 14,
+  borderWidth: 0,
+
+  shadowOffset: {
+    width: 0,
+    height: 6,
+  },
+  shadowOpacity: 0.18,
+  shadowRadius: 10,
+
+  elevation: 6,
+
+  overflow: "hidden",
+},
+
+achievementGlow: {
+  position: "absolute",
+  width: 5,
+  height: "100%",
+  left: 0,
+  top: 0,
+  borderTopLeftRadius: 20,
+  borderBottomLeftRadius: 20,
+},
+
+achievementIconWrapper: {
+  width: 64,
+  height: 64,
+  borderRadius: 20,
+  justifyContent: "center",
+  alignItems: "center",
+  marginRight: 14,
+
+},
+
+achievementEmoji: {
+  fontSize: 30,
+},
+
+achievementTopRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+},
+
+achievementName: {
+  fontSize: 16,
+  flex: 1,
+  paddingRight: 8,
+},
+
+achievementDesc: {
+  marginTop: 6,
+  fontSize: 13,
+  lineHeight: 18,
+},
+
+rarityBadge: {
+  paddingHorizontal: 10,
+  paddingVertical: 4,
+  borderRadius: 999,
+},
+
+rarityText: {
+  fontSize: 10,
+  fontWeight: "800",
+  letterSpacing: 0.6,
+},
+
+bottomMeta: {
+  flexDirection: "row",
+  alignItems: "center",
+  marginTop: 10,
 },
 });

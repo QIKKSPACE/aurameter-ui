@@ -36,9 +36,7 @@ const ZODIAC = [
   { key: "pisces", label: "Pisces", emoji: "♓︎" },
 ];
 
-const achievements = [
-  
-];
+
  
 const ProfileScreen = () => {
   const { theme } = useTheme();
@@ -46,10 +44,13 @@ const ProfileScreen = () => {
   const user=useSelector(state=>state.user)
     const [zodiac, setZodiac] = useState(null);
     const stopPlayerRef = useRef(null);
+const [achievements, setAchievements] = useState([]);
 
 useFocusEffect(
+
   useCallback(() => {
     // on screen focus
+    
     return () => {
       // screen lost focus → STOP MUSIC
       if (stopPlayerRef.current) {
@@ -63,9 +64,10 @@ const { selfRank } = useSelector(
     state => state.leaderboard.campus
   );
   const { selfRank:selfrankGlobal } = useSelector(
-    state => state.leaderboard.campus
+    state => state.leaderboard.global
   );
   useEffect(() => {
+    setAchievements(user?.achievements || []);
     if (user.userData) {
        
     
@@ -74,29 +76,78 @@ const { selfRank } = useSelector(
   
     }
   }, [user]);
-  const renderAchievement = ({ item }) => (
+ const renderAchievement = ({ item, index }) => {
+  const rarityColor = theme.text.background;
+
+  return (
     <View
       style={[
         styles.achievementCard,
-        { backgroundColor: theme.components.card },
+        {
+          backgroundColor: theme.components.box,
+          
+        },
+        theme.background.style !== "image"
+          ? {
+              opacity: theme.opacity.light,
+            }
+          : {},
       ]}
     >
-      <Icon
-        name={item.icon}
-        size={22}
-        color={item.color}
-        style={{ marginRight: 10 }}
+      {/* Glow Accent */}
+      <View
+        style={[
+          styles.achievementGlow,
+          {
+            backgroundColor: rarityColor,
+          },
+        ]}
       />
+
+      {/* Icon */}
+      <View
+        style={[
+          styles.achievementIconWrapper,
+          {
+            backgroundColor: rarityColor + "22",
+    
+          },   
+        ]}
+      >
+        <Text style={styles.achievementEmoji}>
+          {item.icon || "🏆"}
+        </Text>
+      </View>
+
+      {/* Content */}
       <View style={{ flex: 1 }}>
-        <Text style={[styles.achievementName, { color: theme.text.primary }]}>
-          {item.title}
-        </Text>
-        <Text style={[styles.achievementDesc, { color: theme.text.secondary }]}>
-          {item.subtitle}
-        </Text>
+        <View style={styles.achievementTopRow}>
+          <AppText
+            variant="h4"
+            style={[
+              styles.achievementName,
+              { color: theme.text.primary },
+            ]}
+          >
+            {item.title}
+          </AppText>
+        </View>
+
+        <AppText
+          variant="body"
+          style={[
+            styles.achievementDesc,
+            { color: theme.text.secondary },
+          ]}
+        >
+          {item.description}
+        </AppText>
+
+      
       </View>
     </View>
   );
+};
 
   return (
     <ScreenBackground>
@@ -126,7 +177,7 @@ const { selfRank } = useSelector(
                       opacity:theme.opacity.light,padding:4,borderRadius:5
                           }:{}
                       ]}>
-                <AppText  variant="h4" style={[{ color: theme.text.primary,fontSize:20}]}>
+                <AppText  variant="h4" style={[{ color: theme.text.primary,fontSize:20,textAlign:'center' }]}>
                   {user?.userData?.name || ""}
                 </AppText>
                 </View>:""}
@@ -223,7 +274,7 @@ const { selfRank } = useSelector(
               >
                 <View style={styles.statBox}>
                   <AppText style={[ { color: theme.text.primary,fontSize:18 }]} variant="h4">
-                    450
+                    {user?.userData?.total_profile_view || 0}
                   </AppText>
                   <AppText
                     style={[ { color: theme.text.secondary,fontSize:8 }]}
@@ -316,6 +367,7 @@ const { selfRank } = useSelector(
       alignSelf: "center",
       flexDirection: "row",
       alignItems: "center",
+      marginBottom: 20,
     },
     theme.background.style !== "image"
       ? {
@@ -466,7 +518,85 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   avatarImage: { width: 96, height: 96, borderRadius: 48, marginBottom: 12 },
+achievementCard: {
+  flexDirection: "row",
+  alignItems: "center",
+  borderRadius: 20,
+  padding: 14,
+  marginBottom: 14,
+  borderWidth: 0,
 
+  shadowOffset: {
+    width: 0,
+    height: 6,
+  },
+  shadowOpacity: 0.18,
+  shadowRadius: 10,
+
+  elevation: 6,
+
+  overflow: "hidden",
+},
+
+achievementGlow: {
+  position: "absolute",
+  width: 5,
+  height: "100%",
+  left: 0,
+  top: 0,
+  borderTopLeftRadius: 20,
+  borderBottomLeftRadius: 20,
+},
+
+achievementIconWrapper: {
+  width: 64,
+  height: 64,
+  borderRadius: 20,
+  justifyContent: "center",
+  alignItems: "center",
+  marginRight: 14,
+ 
+},
+
+achievementEmoji: {
+  fontSize: 30,
+},
+
+achievementTopRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+},
+
+achievementName: {
+  fontSize: 16,
+  flex: 1,
+  paddingRight: 8,
+},
+
+achievementDesc: {
+  marginTop: 6,
+  fontSize: 13,
+  lineHeight: 18,
+},
+
+rarityBadge: {
+  paddingHorizontal: 10,
+  paddingVertical: 4,
+  borderRadius: 999,
+},
+
+rarityText: {
+  fontSize: 10,
+  fontWeight: "800",
+  letterSpacing: 0.6,
+},
+
+bottomMeta: {
+  flexDirection: "row",
+  alignItems: "center",
+  marginTop: 10,
+},
 });
 
 export default ProfileScreen;

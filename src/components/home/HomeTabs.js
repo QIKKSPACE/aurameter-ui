@@ -1,16 +1,19 @@
 // components/home/HomeTabs.js
 import React from "react";
-import { View, TouchableOpacity } from "react-native";
+import { View, TouchableOpacity, Image } from "react-native";
 import AppText from "../AppText";
 import { styles } from "./styles";
 import { useTheme } from "../../constants/context/ThemeContext";
 
-const tabs = ["Global", "Campus", "Follow"];
+const tabs = [ "Campus","Global", "Follow"];
 
 const HomeTabs = ({ activeTab, onChange }) => {
   const { theme } = useTheme();
 
   return (
+    <>
+   
+    
     <View style={styles.tabs}>
       {tabs.map(tab => (
         <TouchableOpacity key={tab} onPress={() => onChange(tab)}>
@@ -33,6 +36,12 @@ const HomeTabs = ({ activeTab, onChange }) => {
         </TouchableOpacity>
       ))}
     </View>
+     <View style={styles.tabs}>
+          <Image source={require("../../assets/promo-1.png")} style={[styles.promoBanner,{marginLeft:10}]} />
+
+    </View>
+    </>
+
   );
 };
 

@@ -12,14 +12,14 @@ import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.ReactRootView
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
 import com.facebook.react.defaults.DefaultReactActivityDelegate
-
+ import dev.matinzd.healthconnect.permissions.HealthConnectPermissionDelegate
 class MainActivity : ReactActivity() {
 
     private var splashContainer: FrameLayout? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
+         HealthConnectPermissionDelegate.setPermissionDelegate(this)
         // Edge-to-edge UI
         WindowCompat.setDecorFitsSystemWindows(window, true)
         WindowInsetsControllerCompat(window, window.decorView).systemBarsBehavior =

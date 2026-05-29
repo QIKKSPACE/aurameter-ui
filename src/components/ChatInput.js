@@ -19,12 +19,17 @@ const ChatInput = ({
   stopRecording,
   cancelRecording,
   user,
-  onOpenSheet
+  onOpenSheet,
+  imageUri
 }) => {
   const [inputText, setInputText] = useState("");
-  const [selectedImage, setSelectedImage] = useState(null);
+  const [selectedImage, setSelectedImage] = useState( null);
   const [recording, setRecording] = useState(false);
-
+useEffect(() => {
+  if (imageUri) {
+    setSelectedImage(imageUri);
+  }
+}, [imageUri]);
   const hasStopped = useRef(false);
   const startX = useRef(0);
   const isSwipeDetected = useRef(false);
@@ -234,6 +239,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 10,
     paddingVertical: 6,
+    width:60,
   },
 
   previewImage: {
@@ -244,7 +250,7 @@ const styles = StyleSheet.create({
 
   removeImage: {
     position: "absolute",
-    top: -4,
+    top:0,
     right: -4,
     backgroundColor: "#fff",
     borderRadius: 10,

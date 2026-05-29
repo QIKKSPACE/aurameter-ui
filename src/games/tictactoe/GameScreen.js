@@ -79,7 +79,16 @@ const GameScreen = ({ navigation, route }) => {
     }, [navigation]);
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: theme.cardBg }]}>
+        <SafeAreaView
+            style={[
+                styles.container,
+                {
+                    backgroundColor: Array.isArray(theme.bgGradient)
+                        ? theme.bgGradient[0]
+                        : '#121212',
+                },
+            ]}
+        >
             <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
             <AnimatedBackground theme={theme} />
 

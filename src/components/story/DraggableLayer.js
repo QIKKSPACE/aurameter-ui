@@ -5,9 +5,10 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   useDerivedValue,
+  runOnJS
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { runOnJS } from "react-native-worklets";
+
 import LinearGradient from "react-native-linear-gradient";
 
 

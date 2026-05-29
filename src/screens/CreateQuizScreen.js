@@ -1,570 +1,889 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  TextInput,
-  Alert,
   ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
+import { useNavigation, useRoute } from "@react-navigation/native";
+import { useDispatch, useSelector } from "react-redux";
 import Icon from "react-native-vector-icons/Feather";
-import { useTheme } from "../constants/context/ThemeContext";
 import ScreenBackground from "../components/ScreenBackground";
-import { useRoute } from "@react-navigation/native";
-import { useSelector, useDispatch } from "react-redux";
-import { makeSelectQuizByLocalId } from "../store/quizSelectors"; 
+import { useTheme } from "../constants/context/ThemeContext";
+import { makeSelectQuizByLocalId } from "../store/quizSelectors";
 import {
   addQuestion,
-  updateQuestion,
   deleteQuestion,
+  fetchQuizzes,
+  updateQuestion,
+  updateQuizMeta,
 } from "../store/quizSlice";
 import api from "../services/api";
-/* ─────────── Factory helpers ─────────── */
 
 const createOption = () => ({
-  id: `${Date.now()}-${Math.random()}`,
+  id: `opt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
   text: "",
   isCorrect: false,
 });
 
 const createQuestion = () => ({
-  id: `${Date.now()}`, 
   text: "",
   options: [createOption(), createOption()],
 });
 
-/* ─────────── Screen ─────────── */
+const normalizeQuestionForCreate = (question) => ({
+  ...question,
+  options:
+    Array.isArray(question?.options) && question.options.length >= 2
+      ? question.options
+      : [createOption(), createOption()],
+});
+
+const getQuestionIssues = (question) => {
+  if (!question) return ["Question missing."];
+
+  const issues = [];
+  if (!question.text?.trim()) {
+    issues.push("Add a question prompt.");
+  }
+
+  if (!Array.isArray(question.options) || question.options.length < 2) {
+    issues.push("Each question needs at least 2 options.");
+  }
+
+  if (Array.isArray(question.options)) {
+    const emptyOptions = question.options.some((option) => !option.text?.trim());
+    if (emptyOptions) {
+      issues.push("Fill in every option.");
+    }
+
+    const correctCount = question.options.filter((option) => option.isCorrect).length;
+    if (correctCount !== 1) {
+      issues.push("Pick exactly 1 correct answer.");
+    }
+  }
+
+  return issues;
+};
 
 const CreateQuizScreen = () => {
   const { theme } = useTheme();
- const route = useRoute();
-const { quizId: localId } = route.params;
- const dispatch=useDispatch()
-const selectQuizByLocalId = useMemo(makeSelectQuizByLocalId, []);
-const quiz = useSelector(state =>
-  selectQuizByLocalId(state, localId)
-);
-const [isPublishing,setIsPublishing]=useState(false)
-  const user=useSelector(state=>state.user.userData)
-  const accessToken=useSelector(state=>state.user.token)
+  const route = useRoute();
+  const navigation = useNavigation();
+  const dispatch = useDispatch();
+  const { quizId: localId } = route.params || {};
 
-
-const questions = quiz?.questions ?? [];
-
+  const selectQuizByLocalId = useMemo(makeSelectQuizByLocalId, []);
+  const quiz = useSelector((state) => selectQuizByLocalId(state, localId));
+  const user = useSelector((state) => state.user.userData);
 
   const [activeIndex, setActiveIndex] = useState(0);
+  const [isPublishing, setIsPublishing] = useState(false);
 
-const activeQuestion = questions[activeIndex] ?? null;
-  
-  /* ─────────── Question handlers ─────────── */
-useEffect(() => {
-  // Only add a default question if:
-  // 1. The quiz exists
-  // 2. It has no questions yet
+  const questions = quiz?.questions ?? [];
+  const activeQuestion = questions[activeIndex] ?? null;
 
-  if (quiz && questions.length === 0) {
+  useEffect(() => {
+    if (!quiz?.localId) {
+      navigation.goBack();
+    }
+  }, [navigation, quiz?.localId]);
+
+  useEffect(() => {
+    if (quiz?.localId && questions.length === 0) {
+      dispatch(
+        addQuestion({
+          localId,
+          question: createQuestion(),
+        })
+      );
+    }
+  }, [dispatch, localId, questions.length, quiz?.localId]);
+
+  useEffect(() => {
+    if (activeIndex > questions.length - 1) {
+      setActiveIndex(Math.max(questions.length - 1, 0));
+    }
+  }, [activeIndex, questions.length]);
+
+  const currentQuestionIssues = useMemo(
+    () => getQuestionIssues(activeQuestion),
+    [activeQuestion]
+  );
+
+  const quizIssues = useMemo(() => {
+    const issues = [];
+
+    if (!quiz?.quizName?.trim()) {
+      issues.push("Give the quiz a title.");
+    }
+
+    if (!questions.length) {
+      issues.push("Add at least 1 question.");
+    }
+
+    questions.forEach((question, index) => {
+      const questionProblems = getQuestionIssues(question);
+      questionProblems.forEach((problem) => {
+        issues.push(`Question ${index + 1}: ${problem}`);
+      });
+    });
+
+    return issues;
+  }, [questions, quiz?.quizName]);
+
+  const isCurrentQuestionValid = currentQuestionIssues.length === 0;
+  const isQuizValid = quizIssues.length === 0;
+
+  const updateMeta = (data) => {
+    dispatch(
+      updateQuizMeta({
+        localId,
+        data,
+      })
+    );
+  };
+
+  const updateQuestionText = (text) => {
+    if (!activeQuestion) return;
+    dispatch(
+      updateQuestion({
+        localId,
+        questionId: activeQuestion.id,
+        data: { text },
+      })
+    );
+  };
+
+  const updateOptionText = (optionId, text) => {
+    if (!activeQuestion) return;
+
+    dispatch(
+      updateQuestion({
+        localId,
+        questionId: activeQuestion.id,
+        data: {
+          options: activeQuestion.options.map((option) =>
+            option.id === optionId ? { ...option, text } : option
+          ),
+        },
+      })
+    );
+  };
+
+  const markCorrect = (optionId) => {
+    if (!activeQuestion) return;
+
+    dispatch(
+      updateQuestion({
+        localId,
+        questionId: activeQuestion.id,
+        data: {
+          options: activeQuestion.options.map((option) => ({
+            ...option,
+            isCorrect: option.id === optionId,
+          })),
+        },
+      })
+    );
+  };
+
+  const addOption = () => {
+    if (!activeQuestion || activeQuestion.options.length >= 4) return;
+
+    dispatch(
+      updateQuestion({
+        localId,
+        questionId: activeQuestion.id,
+        data: {
+          options: [...activeQuestion.options, createOption()],
+        },
+      })
+    );
+  };
+
+  const deleteOption = (optionId) => {
+    if (!activeQuestion || activeQuestion.options.length <= 2) return;
+
+    const nextOptions = activeQuestion.options.filter((option) => option.id !== optionId);
+    const hasCorrect = nextOptions.some((option) => option.isCorrect);
+
+    dispatch(
+      updateQuestion({
+        localId,
+        questionId: activeQuestion.id,
+        data: {
+          options: hasCorrect
+            ? nextOptions
+            : nextOptions.map((option, index) => ({
+                ...option,
+                isCorrect: index === 0,
+              })),
+        },
+      })
+    );
+  };
+
+  const addQuestionHere = () => {
+    if (questions.length >= 10) return;
+
     dispatch(
       addQuestion({
         localId,
         question: createQuestion(),
       })
     );
-  }
-}, [quiz, questions.length, dispatch, localId]);
-
-
- const updateQuestionText = text => {
-  dispatch(
-    updateQuestion({
-      localId,
-      questionId: activeQuestion.id,
-      data: { text }
-    })
-  );
-};
-const addQuestionHere = () => {
-  if (questions.length >= 10) return;
-
-  dispatch(
-    addQuestion({
-      localId,
-      question: {
-        text: "",
-        options: [
-         createOption(),
-          createOption()
-        ]
-      }
-    })
-  );
-
-  setActiveIndex(questions.length); // move to new question
-};
-
-const deleteCurrentQuestion = () => {
-  if (questions.length < 2) return;
-  dispatch(
-    deleteQuestion({
-      localId,
-      questionId: activeQuestion.id
-    })
-  );
-
-  setActiveIndex(i => Math.max(0, i - 1));
-};
-
-  /* ─────────── Option handlers ─────────── */
-const updateOptionText = (oid, text) => {
-  const updatedOptions = activeQuestion.options.map(o =>
-    o.id === oid ? { ...o, text } : o
-  );
-
-  dispatch(
-    updateQuestion({
-      localId,
-      questionId: activeQuestion.id,
-      data: { options: updatedOptions }
-    })
-  );
-};
-
-
- const addOption = () => {
-  if (activeQuestion.options.length >= 4) return;
-
-  dispatch(
-    updateQuestion({
-      localId,
-      questionId: activeQuestion.id,
-      data: {
-        options: [
-          ...activeQuestion.options,
-          { id: `${Date.now()}`, text: "", isCorrect: false }
-        ]
-      }
-    })
-  );
-};
-
- const deleteOption = oid => {
-  if (activeQuestion.options.length <= 2) return;
-
-  dispatch(
-    updateQuestion({
-      localId,
-      questionId: activeQuestion.id,
-      data: {
-        options: activeQuestion.options.filter(o => o.id !== oid)
-      }
-    })
-  );
-};
-
-
-  const markCorrect = oid => {
-  const updatedOptions = activeQuestion.options.map(o => ({
-    ...o,
-    isCorrect: o.id === oid
-  }));
-
-  dispatch(
-    updateQuestion({
-      localId,
-      questionId: activeQuestion.id,
-      data: { options: updatedOptions }
-    })
-  );
-};
-
-  /* ─────────── Validation ─────────── */
-
-  const isCurrentQuestionValid = useMemo(() => {
-    if(!activeQuestion) return;
-    return (
-      activeQuestion.text.trim() &&
-      activeQuestion.options.every(o => o.text.trim()) &&
-      activeQuestion.options.some(o => o.isCorrect)
-    );
-  }, [activeQuestion]);
-
-  const isQuizValid = useMemo(() => {
-    return (
-      questions.length >=1 &&
-      questions.every(
-        q =>
-          q.text.trim() &&
-          q.options.every(o => o.text.trim()) &&
-          q.options.some(o => o.isCorrect)
-      )
-    );
-  }, [questions]);
-const publishQuiz = async () => {
-   if(!isQuizValid) 
-    {
-      Alert.alert("Quiz not Valid delete empty questions.")
-      return;
-    }
-     const payload = {
-    title: quiz?.quizName || "Untitled Quiz",
-    description: quiz.description || "",
-    userId: user?.id, // from auth
-    localId,
-    questions: questions.map(q => {
-      // Make sure options exist and are array
-      const opts = Array.isArray(q.options) ? q.options : [];
-
-      // Find the index of the correct option
-      const correctIndex = opts.findIndex(o => o.isCorrect);
-
-      return {
-        text: q.text || "",
-        options: q.options.map(o => ({ text: o.text })), // wrap string in object
-        correctIndex: correctIndex >= 0 ? correctIndex : 0, // fallback to first option
-      };
-    }),
+    setActiveIndex(questions.length);
   };
 
-  try {
+  const deleteCurrentQuestion = () => {
+    if (!activeQuestion) return;
+
+    if (questions.length <= 1) {
+      Alert.alert("Keep 1 question", "A quiz needs at least 1 question.");
+      return;
+    }
+
+    dispatch(
+      deleteQuestion({
+        localId,
+        questionId: activeQuestion.id,
+      })
+    );
+
+    setActiveIndex((index) => Math.max(0, index - 1));
+  };
+
+  const publishQuiz = async () => {
+    if (!isQuizValid) {
+      Alert.alert("Quiz needs attention", quizIssues[0] || "Complete the quiz first.");
+      return;
+    }
+
+    const payload = {
+      title: quiz.quizName.trim(),
+      description: quiz.description?.trim() || "",
+      userId: user?.id,
+      localId,
+      questions: questions.map((question) => {
+        const normalized = normalizeQuestionForCreate(question);
+        const correctIndex = normalized.options.findIndex((option) => option.isCorrect);
+
+        return {
+          text: normalized.text.trim(),
+          options: normalized.options.map((option) => ({
+            text: option.text.trim(),
+          })),
+          correctIndex,
+        };
+      }),
+    };
+
+    setIsPublishing(true);
+    try {
       const res = await api.post("/quiz/", payload);
 
-    if (res?.data?.success) {
-     // console.log("Quiz created:", data);    
-      // optionally navigate to quiz detail or home
-    } else {
-      //console.log("Error creating quiz:", data);
+      if (!res?.data?.success) {
+        throw new Error(res?.data?.message || "Could not publish quiz.");
+      }
+
+      updateMeta({
+        status: "synced",
+        serverId: res.data?.quiz?._id || res.data?._id || quiz.serverId || null,
+      });
+
+      dispatch(fetchQuizzes());
+      Alert.alert("Quiz published", "Your quiz is ready to share.");
+      navigation.goBack();
+    } catch (error) {
+      Alert.alert(
+        "Publish failed",
+        error?.response?.data?.message || error?.message || "Please try again."
+      );
+    } finally {
+      setIsPublishing(false);
     }
-  } catch (err) {
-    console.log("Network error:", err);
-  }  
+  };
 
-  // Transform Redux-style quiz to server format
-  
-};
-
-  /* ─────────── Render ─────────── */
-if (!activeQuestion) {
-  return (
-    <ScreenBackground>
-      <View style={styles.container}>
-        <Text style={{ color: "white" }}>Preparing first question…</Text>
-      </View>
-    </ScreenBackground>
-  );
-}
-
-  return (
-    <ScreenBackground>
-      <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <Text style={[styles.title, { color: theme.text.primary }]}>
-            Create Quiz
-          </Text>
-
-          <Text style={{ color: "white" }}>
-            {activeIndex + 1} / 10
+  if (!quiz?.localId || !activeQuestion) {
+    return (
+      <ScreenBackground>
+        <View style={styles.loadingState}>
+          <ActivityIndicator size="large" color={theme.text.accent} />
+          <Text style={[styles.loadingText, { color: theme.text.primary }]}>
+            Preparing quiz editor...
           </Text>
         </View>
+      </ScreenBackground>
+    );
+  }
 
-        {/* Card */}
-        <View style={styles.cardWrapper}>
+  return (
+    <ScreenBackground>
+      <View style={styles.container}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            style={[styles.headerIcon, { backgroundColor: theme.components.card }]}
+            onPress={() => navigation.goBack()}
+          >
+            <Icon name="arrow-left" size={18} color={theme.text.primary} />
+          </TouchableOpacity>
+
+          <View style={styles.headerCopy}>
+            <Text style={[styles.title, { color: theme.text.primary }]}>Create Quiz</Text>
+            <Text style={[styles.subtitle, { color: theme.text.secondary }]}>
+              {questions.length} question{questions.length === 1 ? "" : "s"} built
+            </Text>
+          </View>
+
           <View
             style={[
-              styles.glowLayer,
-              { backgroundColor: theme.gradients.tab[1] },
+              styles.progressChip,
+              { backgroundColor: theme.components.card, borderColor: theme.components.border },
             ]}
-          />
+          >
+            <Text style={[styles.progressChipText, { color: theme.text.primary }]}>
+              {activeIndex + 1}/10
+            </Text>
+          </View>
+        </View>
 
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           <View
             style={[
-              styles.card,
+              styles.panel,
               {
                 backgroundColor: theme.components.card,
                 borderColor: theme.components.border,
               },
             ]}
           >
-            {/* Question Header */}
-            <View style={styles.questionHeader}>
-              <Text
-                style={[
-                  styles.questionIndex,
-                  { color: theme.text.accent },
-                ]}
-              >
-                Question {activeIndex + 1}
-              </Text>
+            <Text style={[styles.sectionLabel, { color: theme.text.secondary }]}>
+              Quiz Details
+            </Text>
 
-             
-                <TouchableOpacity onPress={deleteCurrentQuestion}>
-                  <Icon
-                    name="trash-2"
-                    size={18}
-                    color={theme.text.accent}
-                  />
-                </TouchableOpacity>
-          
-            </View>
-
-            {/* Question Input */}
             <TextInput
-              placeholder="Type your question"
-              placeholderTextColor={theme.text.muted}
+              placeholder="Quiz title"
+              placeholderTextColor={theme.text.primary}
               style={[
-                styles.input,
+                styles.titleInput,
                 {
                   color: theme.text.primary,
                   borderColor: theme.components.border,
                 },
               ]}
-              value={activeQuestion?.text}
-              onChangeText={updateQuestionText}
+              value={quiz.quizName}
+              onChangeText={(text) => updateMeta({ quizName: text })}
+              maxLength={50}
             />
 
-            {/* Options */}
-            {activeQuestion.options.map((o, oi) => (
+            <TextInput
+              placeholder="Short description"
+              placeholderTextColor={theme.text.primary}
+              style={[
+                styles.descriptionInput,
+                {
+                  color: theme.text.primary,
+                  borderColor: theme.components.border,
+                },
+              ]}
+              value={quiz.description}
+              onChangeText={(text) => updateMeta({ description: text })}
+              multiline
+              textAlignVertical="top"
+              maxLength={200}
+            />
+
+            <Text style={[styles.helperText, { color: theme.text.secondary }]}>
+              Keep it crisp so friends know what this quiz is about.
+            </Text>
+          </View>
+
+          <View style={styles.questionRail}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {questions.map((question, index) => {
+                const valid = getQuestionIssues(question).length === 0;
+                const isActive = index === activeIndex;
+
+                return (
+                  <TouchableOpacity
+                    key={question.id}
+                    onPress={() => setActiveIndex(index)}
+                    style={[
+                      styles.questionPill,
+                      {
+                        backgroundColor: isActive
+                          ? theme.text.accent
+                          : theme.components.card,
+                        borderColor: isActive
+                          ? theme.text.accent
+                          : valid
+                            ? theme.components.border
+                            : "#F97316",
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.questionPillText,
+                        {
+                          color: isActive ? "#FFFFFF" : theme.text.primary,
+                        },
+                      ]}
+                    >
+                      Q{index + 1}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+
+          <View
+            style={[
+              styles.panel,
+              {
+                backgroundColor: theme.components.card,
+                borderColor: theme.components.border,
+              },
+            ]}
+          >
+            <View style={styles.questionHeader}>
+              <View>
+                <Text style={[styles.sectionLabel, { color: theme.text.secondary }]}>
+                  Question {activeIndex + 1}
+                </Text>
+                <Text style={[styles.questionTitle, { color: theme.text.primary }]}>
+                  Build the prompt and answers
+                </Text>
+              </View>
+
               <TouchableOpacity
-                key={o.id}
+                onPress={deleteCurrentQuestion}
                 style={[
-                  styles.option,
+                  styles.deleteChip,
+                  { borderColor: theme.components.border },
+                ]}
+              >
+                <Icon name="trash-2" size={16} color={theme.text.primary} />
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              placeholder="Type your question"
+              placeholderTextColor={theme.text.primary}
+              style={[
+                styles.questionInput,
+                {
+                  color: theme.text.primary,
+                  borderColor: theme.components.border,
+                },
+              ]}
+              value={activeQuestion.text}
+              onChangeText={updateQuestionText}
+              multiline
+            />
+
+            {activeQuestion.options.map((option, optionIndex) => (
+              <View
+                key={option.id}
+                style={[
+                  styles.optionCard,
                   {
-                    borderColor: o.isCorrect
+                    backgroundColor: option.isCorrect
+                      ? `${theme.text.accent}18`
+                      : "transparent",
+                    borderColor: option.isCorrect
                       ? theme.text.accent
                       : theme.components.border,
                   },
                 ]}
-                onPress={() => markCorrect(o.id)}
-                activeOpacity={0.8}
               >
-                <View
-                  style={[
-                    styles.dot,
-                    {
-                      backgroundColor: o.isCorrect
-                        ? theme.text.accent
-                        : theme.text.primary,
-                    },
-                  ]}
-                />
+                <TouchableOpacity
+                  style={styles.optionSelector}
+                  onPress={() => markCorrect(option.id)}
+                >
+                  <View
+                    style={[
+                      styles.optionDot,
+                      {
+                        borderColor: option.isCorrect
+                          ? theme.text.accent
+                          : theme.text.secondary,
+                        backgroundColor: option.isCorrect
+                          ? theme.text.accent
+                          : "transparent",
+                      },
+                    ]}
+                  />
+                </TouchableOpacity>
 
                 <TextInput
-                  placeholder={`Option ${oi + 1}`}
-                  placeholderTextColor={theme.text.muted}
-                  style={[
-                    styles.optionInput,
-                    { color: theme.text.primary },
-                  ]}
-                  value={o.text}
-                  onChangeText={t => updateOptionText(o.id, t)}
+                  placeholder={`Option ${optionIndex + 1}`}
+                  placeholderTextColor={theme.text.primary}
+                  style={[styles.optionInput, { color: theme.text.primary }]}
+                  value={option.text}
+                  onChangeText={(text) => updateOptionText(option.id, text)}
                 />
 
-                {activeQuestion.options.length > 2 && (
-                  <TouchableOpacity
-                    onPress={() => deleteOption(o.id)}
-                  >
-                    <Icon
-                      name="x"
-                      size={16}
-                      color={theme.text.muted}
-                    />
+                {activeQuestion.options.length > 2 ? (
+                  <TouchableOpacity onPress={() => deleteOption(option.id)}>
+                    <Icon name="x" size={18} color={theme.text.secondary} />
                   </TouchableOpacity>
-                )}
-              </TouchableOpacity>
+                ) : null}
+              </View>
             ))}
 
-            {activeQuestion.options.length < 4 && (
-              <TouchableOpacity onPress={addOption}>
-                <Text
-                  style={[
-                    styles.addText,
-                    { color: theme.text.accent },
-                  ]}
-                >
-                  + Add option
+            <View style={styles.inlineActions}>
+              <TouchableOpacity
+                onPress={addOption}
+                disabled={activeQuestion.options.length >= 4}
+                style={[
+                  styles.secondaryAction,
+                  {
+                    opacity: activeQuestion.options.length >= 4 ? 0.5 : 1,
+                    borderColor: theme.components.border,
+                  },
+                ]}
+              >
+                <Icon name="plus" size={16} color={theme.text.primary} />
+                <Text style={[styles.secondaryActionText, { color: theme.text.primary }]}>
+                  Add option
                 </Text>
+              </TouchableOpacity>
+
+              <Text style={[styles.helperText, { color: theme.text.secondary }]}>
+                Tap the circle to mark the correct answer.
+              </Text>
+            </View>
+          </View>
+
+          {currentQuestionIssues.length ? (
+            <View
+              style={[
+                styles.warningBox,
+                { backgroundColor: "rgba(249,115,22,0.14)", borderColor: "#F97316" },
+              ]}
+            >
+              <Text style={styles.warningTitle}>Current question needs work</Text>
+              <Text style={styles.warningBody}>{currentQuestionIssues[0]}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.footerRow}>
+            <TouchableOpacity
+              disabled={activeIndex === 0}
+              onPress={() => setActiveIndex((index) => Math.max(index - 1, 0))}
+              style={[
+                styles.navButton,
+                {
+                  backgroundColor: theme.components.card,
+                  borderColor: theme.components.border,
+                  opacity: activeIndex === 0 ? 0.45 : 1,
+                },
+              ]}
+            >
+              <Text style={[styles.navButtonText, { color: theme.text.primary }]}>
+                Previous
+              </Text>
+            </TouchableOpacity>
+
+            {activeIndex < questions.length - 1 ? (
+              <TouchableOpacity
+                disabled={!isCurrentQuestionValid}
+                onPress={() => setActiveIndex((index) => index + 1)}
+                style={[
+                  styles.primaryButton,
+                  {
+                    backgroundColor: theme.text.accent,
+                    opacity: isCurrentQuestionValid ? 1 : 0.45,
+                  },
+                ]}
+              >
+                <Text style={styles.primaryButtonText}>Next</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                disabled={!isCurrentQuestionValid || questions.length >= 10}
+                onPress={addQuestionHere}
+                style={[
+                  styles.primaryButton,
+                  {
+                    backgroundColor: theme.text.accent,
+                    opacity:
+                      isCurrentQuestionValid && questions.length < 10 ? 1 : 0.45,
+                  },
+                ]}
+              >
+                <Text style={styles.primaryButtonText}>New Question</Text>
               </TouchableOpacity>
             )}
           </View>
-        </View>
 
-        {/* Navigation */}
-     <View style={styles.navRow}>
-  {/* Previous */}
-  <TouchableOpacity
-    disabled={activeIndex === 0}
-    onPress={() => setActiveIndex(i => i - 1)}
-    style={[
-      styles.navButton,
-      { opacity: activeIndex === 0 ? 0.4 : 1 },
-    ]}
-  >
-    <Text style={styles.navText}>← Previous</Text>
-  </TouchableOpacity>
-
-  {/* NEXT or ADD */}
-  {activeIndex < questions.length - 1 ? (
-    /* NEXT */
-    <TouchableOpacity
-      disabled={!isCurrentQuestionValid}
-      onPress={() => setActiveIndex(i => i + 1)}
-      style={[
-        styles.navButton,
-        { opacity: isCurrentQuestionValid ? 1 : 0.4 },
-      ]}
-    >
-      <Text style={styles.navText}>Next →</Text>
-    </TouchableOpacity>
-  ) : questions.length < 10 ? (
-    /* ADD QUESTION */
-    <TouchableOpacity
-      disabled={!isCurrentQuestionValid}
-      onPress={addQuestionHere}
-      style={[
-        styles.navButton,
-        { opacity: isCurrentQuestionValid ? 1 : 0.4 },
-      ]}
-    >
-      <Text style={styles.navText}>+ New Question</Text>
-    </TouchableOpacity>
-  ) : null}
-</View>
-
-
-        {/* Submit */}
-   { questions.length > 1 && (
-           <TouchableOpacity
-              style={[
-                styles.submitBtn,
-                { backgroundColor:'white' },
-
-              ]}
-               onPress={()=>{publishQuiz()}}
-               disabled={isPublishing}
-            >
-              {isPublishing?<ActivityIndicator size={'small'} color={'black'} />:    <Text
-                style={[
-                  styles.submitText,
-                  { color: 'black' },
-                ]}
-              >
-                Publish Quiz
-              </Text>}
-          
-            </TouchableOpacity>
-   )}
+          <TouchableOpacity
+            disabled={!isQuizValid || isPublishing}
+            onPress={publishQuiz}
+            style={[
+              styles.publishButton,
+              {
+                backgroundColor: theme.text.accent,
+                opacity: !isQuizValid || isPublishing ? 0.55 : 1,
+              },
+            ]}
+          >
+            {isPublishing ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={styles.publishButtonText}>Publish Quiz</Text>
+            )}
+          </TouchableOpacity>
+        </ScrollView>
       </View>
     </ScreenBackground>
   );
 };
 
-/* ─────────── Styles ─────────── */
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+  },
+  loadingState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 15,
+    fontWeight: "600",
   },
   headerRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 16,
   },
+  headerIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerCopy: {
+    flex: 1,
+    marginLeft: 12,
+    minWidth: 0,
+  },
   title: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "700",
   },
-  cardWrapper: {
+  subtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  progressChip: {
+    minWidth: 58,
+    height: 36,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    borderWidth: 1,
     alignItems: "center",
-    marginVertical: 20,
+    justifyContent: "center",
   },
-  glowLayer: {
-    position: "absolute",
-    bottom: -10,
-    width: "90%",
-    height: "95%",
-    borderRadius: 20,
-    opacity: 0.6,
+  progressChipText: {
+    fontSize: 13,
+    fontWeight: "700",
   },
-  card: {
-    width: "95%",
-    padding: 20,
+  scrollContent: {
+    paddingBottom: 36,
+  },
+  panel: {
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 16,
+    marginBottom: 14,
+  },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    marginBottom: 10,
+  },
+  titleInput: {
     borderWidth: 1,
     borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  descriptionInput: {
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    fontSize: 14,
+    marginTop: 12,
+    minHeight: 96,
+  },
+  helperText: {
+    fontSize: 12,
+    marginTop: 10,
+  },
+  questionRail: {
+    marginBottom: 14,
+  },
+  questionPill: {
+    minWidth: 54,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
+    paddingHorizontal: 14,
+  },
+  questionPillText: {
+    fontSize: 13,
+    fontWeight: "700",
   },
   questionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 14,
   },
-  questionIndex: {
-    fontSize: 14,
-    fontWeight: "600",
+  questionTitle: {
+    fontSize: 18,
+    fontWeight: "700",
   },
-  input: {
+  deleteChip: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 16,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  option: {
+  questionInput: {
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    fontSize: 16,
+    minHeight: 92,
+    textAlignVertical: "top",
+  },
+  optionCard: {
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    marginBottom: 12,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    minHeight: 56,
+    marginTop: 12,
   },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 10,
-    marginRight: 12,
+  optionSelector: {
+    paddingRight: 10,
+    paddingVertical: 8,
+  },
+  optionDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
   },
   optionInput: {
     flex: 1,
     fontSize: 15,
+    paddingVertical: 12,
   },
-  addText: {
-    fontSize: 14,
+  inlineActions: {
+    marginTop: 12,
+  },
+  secondaryAction: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  secondaryActionText: {
+    marginLeft: 6,
+    fontSize: 13,
     fontWeight: "600",
-    marginTop: 8,
   },
-  navRow: {
+  warningBox: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 14,
+  },
+  warningTitle: {
+    color: "#FDBA74",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  warningBody: {
+    color: "#FFEDD5",
+    fontSize: 13,
+    marginTop: 4,
+  },
+  footerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 8,
+    marginBottom: 14,
   },
-  navText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color:'black'
-  },
-  submitBtn: {
-    marginTop: 20,
+  navButton: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 16,
     borderWidth: 1,
-    paddingVertical: 14,
-    borderRadius: 14,
     alignItems: "center",
-    width:140,
-    alignSelf:'center'
+    justifyContent: "center",
+    marginRight: 5,
   },
-  submitText: {
+  navButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  primaryButton: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 5,
+  },
+  primaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  publishButton: {
+    minHeight: 54,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  publishButtonText: {
+    color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "700",
   },
-  navButton: {
-  backgroundColor: "white",
-  paddingVertical: 10,
-  paddingHorizontal: 14,
-  borderRadius: 10,
-  minWidth:100,
-  textAlign:'center',
-  alignItems:'center'
-},
 });
 
 export default CreateQuizScreen;

@@ -139,7 +139,7 @@ const handleScroll = (event) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [showMusicModal,setShowMusicModal]=useState(false)
   const avatarSource = other_avatar
-    ? { uri: `https://api.aurameter.in${other_avatar}` }
+    ? { uri: `http://localhost:5001${other_avatar}` }
     : require("../assets/newframe.png");
 
   // Check Android microphone permission

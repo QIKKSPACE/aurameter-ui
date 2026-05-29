@@ -27,17 +27,20 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { useTheme } from "../constants/context/ThemeContext";
 import LottieParticles from "../assets/particles.json";
+
 import { useNavigation } from "@react-navigation/native";
 
 /* ------------------ CONSTANTS ------------------ */
 const MUSIC_CACHE_KEY = "breathing_music_cache";
 const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+const SESSION_DURATION = 120; // 2 minutes
 
 /* ------------------ SCREEN ------------------ */
 const BreathingScreen = () => {
   const { theme } = useTheme();
   const videoRef = useRef(null);
-  const navigation=useNavigation()
+  const navigation = useNavigation();
+
   /* ------------------ STATES ------------------ */
   const [isPlaying, setIsPlaying] = useState(false);
   const [cycleDuration, setCycleDuration] = useState(6);
@@ -55,6 +58,9 @@ const BreathingScreen = () => {
   const [infoVisible, setInfoVisible] = useState(false);
   const [musicModal, setMusicModal] = useState(false);
 
+  // NEW
+  const [auraVisible, setAuraVisible] = useState(false);
+
   /* ------------------ ANIMATION ------------------ */
   const scale = useSharedValue(0.6);
 
@@ -68,11 +74,19 @@ const BreathingScreen = () => {
 
     const startCycle = () => {
       setPhase("Inhale");
-      scale.value = withTiming(1, { duration: half, easing: Easing.inOut(Easing.ease) });
+
+      scale.value = withTiming(1, {
+        duration: half,
+        easing: Easing.inOut(Easing.ease),
+      });
 
       phaseTimeout = setTimeout(() => {
         setPhase("Exhale");
-        scale.value = withTiming(0.6, { duration: half, easing: Easing.inOut(Easing.ease) });
+
+        scale.value = withTiming(0.6, {
+          duration: half,
+          easing: Easing.inOut(Easing.ease),
+        });
       }, half);
     };
 
@@ -93,7 +107,26 @@ const BreathingScreen = () => {
   /* ------------------ TIMER ------------------ */
   useEffect(() => {
     if (!isPlaying) return;
-    const t = setInterval(() => setElapsed(e => e + 1), 1000);
+
+    const t = setInterval(() => {
+      setElapsed((e) => {
+        // SESSION COMPLETE
+        if (e + 1 >= SESSION_DURATION) {
+          clearInterval(t);
+
+          setIsPlaying(false);
+          setAuraVisible(true);
+
+          scale.value = withTiming(0.6, { duration: 400 });
+          setPhase("Complete");
+
+          return SESSION_DURATION;
+        }
+
+        return e + 1;
+      });
+    }, 1000);
+
     return () => clearInterval(t);
   }, [isPlaying]);
 
@@ -101,9 +134,11 @@ const BreathingScreen = () => {
   useEffect(() => {
     (async () => {
       const raw = await AsyncStorage.getItem(MUSIC_CACHE_KEY);
+
       if (!raw) return;
 
       const cache = JSON.parse(raw);
+
       if (Date.now() - cache.fetchedAt < SEVEN_DAYS) {
         setCurrentSong(cache.song);
         setMusicLocked(true);
@@ -114,11 +149,16 @@ const BreathingScreen = () => {
   /* ------------------ MUSIC SEARCH ------------------ */
   const searchAudio = async () => {
     if (!searchQuery) return;
+
     try {
       setLoading(true);
+
       const res = await axios.get(
-        `https://saavn.sumit.co/api/search/songs?query=${encodeURIComponent(searchQuery)}`
+        `https://saavn.sumit.co/api/search/songs?query=${encodeURIComponent(
+          searchQuery
+        )}`
       );
+
       setSearchResults(res.data.data.results || []);
     } finally {
       setLoading(false);
@@ -127,13 +167,36 @@ const BreathingScreen = () => {
 
   const selectSong = async (song) => {
     const payload = { song, fetchedAt: Date.now() };
+
     await AsyncStorage.setItem(MUSIC_CACHE_KEY, JSON.stringify(payload));
+
     setCurrentSong(song);
     setMusicLocked(true);
     setMusicModal(false);
   };
 
   const audioUrl = currentSong?.downloadUrl?.[0]?.url;
+
+  /* ------------------ START SESSION ------------------ */
+  const handleSession = () => {
+    if (isPlaying) {
+      setIsPlaying(false);
+      return;
+    }
+
+    // Restart session if completed
+    if (elapsed >= SESSION_DURATION) {
+      setElapsed(0);
+      setPhase("Inhale");
+    }
+
+    setIsPlaying(true);
+  };
+
+  /* ------------------ FORMAT TIMER ------------------ */
+  const remaining = SESSION_DURATION - elapsed;
+  const mins = Math.floor(remaining / 60);
+  const secs = remaining % 60;
 
   /* ------------------ UI ------------------ */
   return (
@@ -142,16 +205,19 @@ const BreathingScreen = () => {
         source={LottieParticles}
         autoPlay
         loop
-        style={{ ...StyleSheet.absoluteFillObject, opacity: 0.12 }}
+        style={{
+          ...StyleSheet.absoluteFillObject,
+          opacity: 0.12,
+        }}
       />
 
       {/* HEADER */}
       <View style={styles.headerRow}>
-        <TouchableOpacity onPress={()=>{navigation.goBack()}}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
           <Icon name="arrow-left" size={22} color="#fff" />
         </TouchableOpacity>
 
-        <Text style={styles.title}>Breathing</Text>
+        <Text style={styles.title}>2 Minute Breathing</Text>
 
         <TouchableOpacity onPress={() => setInfoVisible(true)}>
           <Icon name="info" size={22} color="#00E5FF" />
@@ -160,13 +226,21 @@ const BreathingScreen = () => {
 
       {/* TIMER */}
       <Text style={styles.timer}>
-        {Math.floor(elapsed / 60)}:{(elapsed % 60).toString().padStart(2, "0")}
+        {mins}:{secs.toString().padStart(2, "0")}
+      </Text>
+
+      <Text style={styles.sessionText}>
+        Calm your body • Reset your energy
       </Text>
 
       {/* BREATHING CIRCLE */}
       <Animated.View style={[styles.phaseCircle, animatedStyle]}>
         <LinearGradient
-          colors={phase === "Inhale" ? ["#00E5FF", "#A45EE5"] : ["#FF8C42", "#00FF7F"]}
+          colors={
+            phase === "Inhale"
+              ? ["#00E5FF", "#A45EE5"]
+              : ["#FF8C42", "#00FF7F"]
+          }
           style={styles.gradientCircle}
         >
           <Text style={styles.phaseText}>{phase}</Text>
@@ -174,9 +248,12 @@ const BreathingScreen = () => {
       </Animated.View>
 
       {/* CONTROLS */}
-      {!isPlaying && (
+      {!isPlaying && elapsed < SESSION_DURATION && (
         <View style={styles.sliderWrapper}>
-          <Text style={styles.sliderLabel}>Breathing Cycle · {cycleDuration}s</Text>
+          <Text style={styles.sliderLabel}>
+            Breathing Cycle · {cycleDuration}s
+          </Text>
+
           <Slider
             minimumValue={4}
             maximumValue={12}
@@ -190,7 +267,10 @@ const BreathingScreen = () => {
       )}
 
       {!musicLocked && (
-        <TouchableOpacity style={styles.musicBtn} onPress={() => setMusicModal(true)}>
+        <TouchableOpacity
+          style={styles.musicBtn}
+          onPress={() => setMusicModal(true)}
+        >
           <Icon name="music" size={18} color="#0D1B2A" />
           <Text style={styles.musicText}>Choose Music</Text>
         </TouchableOpacity>
@@ -198,10 +278,14 @@ const BreathingScreen = () => {
 
       <TouchableOpacity
         style={styles.actionBtn}
-        onPress={() => setIsPlaying(p => !p)}
+        onPress={handleSession}
       >
         <Text style={styles.actionText}>
-          {isPlaying ? "Pause Session" : "Start Session"}
+          {isPlaying
+            ? "Pause Session"
+            : elapsed >= SESSION_DURATION
+            ? "Start Again"
+            : "Start Session"}
         </Text>
       </TouchableOpacity>
 
@@ -213,33 +297,32 @@ const BreathingScreen = () => {
           paused={!isPlaying}
           audioOnly
           repeat
-          onEnd={() => {
-            setIsPlaying(false);
-            scale.value = 0.6;
-            setPhase("Inhale");
-          }}
         />
       )}
 
       {/* INFO MODAL */}
       <Modal visible={infoVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <LinearGradient colors={["#0D1B2A", "#1B2C3A"]} style={styles.infoCard}>
+          <LinearGradient
+            colors={["#0D1B2A", "#1B2C3A"]}
+            style={styles.infoCard}
+          >
             <Text style={styles.modalTitle}>Breathing Ritual</Text>
-            <Text style={styles.modalText}>
-              This space is designed to calm your nervous system.
-              {"\n\n"}
-              Follow the expanding circle as you inhale.
-              Follow the contraction as you exhale.
-              {"\n\n"}
-              Let the rhythm guide your body back to stillness.
 
+            <Text style={styles.modalText}>
+              This 2 minute ritual is designed to calm your nervous system.
+              {"\n\n"}
+              Inhale with the expanding light.
+              {"\n"}
+              Exhale with the soft contraction.
+              {"\n\n"}
+              Let your breath guide you back to stillness.
             </Text>
-             <Text style={styles.modalText}>
-              You can Select Music Once per week, purchase premium to select music daily.
-              
-            </Text>
-            <TouchableOpacity style={styles.modalBtn} onPress={() => setInfoVisible(false)}>
+
+            <TouchableOpacity
+              style={styles.modalBtn}
+              onPress={() => setInfoVisible(false)}
+            >
               <Text style={styles.modalBtnText}>Close</Text>
             </TouchableOpacity>
           </LinearGradient>
@@ -248,7 +331,10 @@ const BreathingScreen = () => {
 
       {/* MUSIC MODAL */}
       <Modal visible={musicModal} animationType="slide">
-        <LinearGradient colors={["#0D1B2A", "#1B2C3A"]} style={{ flex: 1, padding: 16 }}>
+        <LinearGradient
+          colors={["#0D1B2A", "#1B2C3A"]}
+          style={{ flex: 1, padding: 16 }}
+        >
           <Text style={styles.modalTitle}>Choose Music</Text>
 
           <TextInput
@@ -267,19 +353,74 @@ const BreathingScreen = () => {
               data={searchResults}
               keyExtractor={(i) => i.id}
               renderItem={({ item }) => (
-                <TouchableOpacity style={styles.songItem} onPress={() => selectSong(item)}>
-                  <Image source={{ uri: item.image?.[2]?.url }} style={styles.songImage} />
+                <TouchableOpacity
+                  style={styles.songItem}
+                  onPress={() => selectSong(item)}
+                >
+                  <Image
+                    source={{ uri: item.image?.[2]?.url }}
+                    style={styles.songImage}
+                  />
+
                   <Text style={styles.songTitle}>{item.name}</Text>
                 </TouchableOpacity>
               )}
             />
           )}
 
-          <TouchableOpacity style={styles.modalBtn} onPress={() => setMusicModal(false)}>
+          <TouchableOpacity
+            style={styles.modalBtn}
+            onPress={() => setMusicModal(false)}
+          >
             <Text style={styles.modalBtnText}>Close</Text>
           </TouchableOpacity>
         </LinearGradient>
       </Modal>
+
+      {/* AURA CLAIM POPUP */}
+    {/* SIMPLE SUCCESS MODAL */}
+<Modal visible={auraVisible} transparent animationType="fade">
+  <View style={styles.modalOverlay}>
+    <LinearGradient
+      colors={["#111827", "#1F2937"]}
+      style={styles.successCard}
+    >
+      <View style={styles.successGlow} />
+
+      <Text style={styles.successEmoji}>✨</Text>
+
+      <Text style={styles.successTitle}>
+        Session Complete
+      </Text>
+
+      <Text style={styles.successText}>
+        You completed your 2 minute breathing ritual.
+        {"\n\n"}
+        Your mind feels calmer.
+        {"\n"}
+        Your energy feels lighter.
+      </Text>
+
+      <TouchableOpacity
+        style={styles.claimBtn}
+        onPress={() => {
+          setAuraVisible(false);
+          setElapsed(0);
+          setPhase("Inhale");
+        }}
+      >
+        <LinearGradient
+          colors={["#00E5FF", "#8B5CF6"]}
+          style={styles.claimGradient}
+        >
+          <Text style={styles.claimText}>
+            Claim Your Aura
+          </Text>
+        </LinearGradient>
+      </TouchableOpacity>
+    </LinearGradient>
+  </View>
+</Modal>
     </LinearGradient>
   );
 };
@@ -294,24 +435,57 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: "center",
   },
-  title: { fontSize: 20, fontWeight: "700", color: "#fff" },
+
+  title: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#fff",
+  },
 
   timer: {
-    fontSize: 48,
-    fontWeight: "800",
+    fontSize: 58,
+    fontWeight: "900",
     color: "#fff",
     textAlign: "center",
-    marginVertical: 12,
+    marginTop: 10,
   },
 
-  phaseCircle: { alignSelf: "center", width: 190, height: 190, borderRadius: 95 },
-  gradientCircle: { flex: 1, borderRadius: 95, justifyContent: "center", alignItems: "center" },
-  phaseText: { fontSize: 22, fontWeight: "700", color: "#fff" },
+  sessionText: {
+    textAlign: "center",
+    color: "#9FB3C8",
+    marginBottom: 20,
+    fontSize: 15,
+  },
+
+  phaseCircle: {
+    alignSelf: "center",
+    width: 210,
+    height: 210,
+    borderRadius: 105,
+    shadowColor: "#00E5FF",
+    shadowOpacity: 0.6,
+    shadowRadius: 20,
+    elevation: 20,
+  },
+
+  gradientCircle: {
+    flex: 1,
+    borderRadius: 105,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  phaseText: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: "#fff",
+  },
 
   sliderWrapper: {
-    marginTop: 24,
+    marginTop: 28,
     paddingHorizontal: 24,
   },
+
   sliderLabel: {
     textAlign: "center",
     color: "#B8C1CC",
@@ -328,40 +502,58 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     alignItems: "center",
   },
-  musicText: { marginLeft: 8, fontWeight: "600", color: "#0D1B2A" },
+
+  musicText: {
+    marginLeft: 8,
+    fontWeight: "600",
+    color: "#0D1B2A",
+  },
 
   actionBtn: {
-    marginTop: 30,
+    marginTop: 34,
     alignSelf: "center",
     backgroundColor: "#A45EE5",
-    paddingHorizontal: 50,
-    paddingVertical: 14,
+    paddingHorizontal: 55,
+    paddingVertical: 16,
     borderRadius: 40,
+    shadowColor: "#A45EE5",
+    shadowOpacity: 0.5,
+    shadowRadius: 14,
+    elevation: 10,
   },
-  actionText: { fontSize: 16, fontWeight: "700", color: "#fff" },
+
+  actionText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#fff",
+  },
 
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: "rgba(0,0,0,0.65)",
     justifyContent: "center",
     alignItems: "center",
   },
+
   infoCard: {
     width: "85%",
-    borderRadius: 24,
+    borderRadius: 28,
     padding: 24,
   },
+
   modalTitle: {
     fontSize: 22,
     fontWeight: "700",
     color: "#fff",
     marginBottom: 12,
   },
+
   modalText: {
     fontSize: 15,
     color: "#B8C1CC",
-    lineHeight: 22,
+    lineHeight: 24,
   },
+
   modalBtn: {
     marginTop: 24,
     alignSelf: "center",
@@ -370,7 +562,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 30,
   },
-  modalBtnText: { fontWeight: "600", color: "#0D1B2A" },
+
+  modalBtnText: {
+    fontWeight: "600",
+    color: "#0D1B2A",
+  },
 
   searchInput: {
     borderWidth: 1,
@@ -387,6 +583,76 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 10,
   },
-  songImage: { width: 44, height: 44, borderRadius: 8, marginRight: 12 },
-  songTitle: { color: "#fff", fontWeight: "600" },
-});
+
+  songImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    marginRight: 12,
+  },
+
+  songTitle: {
+    color: "#fff",
+    fontWeight: "600",
+  },
+
+  /* AURA POPUP */
+/* SIMPLE SUCCESS MODAL */
+successCard: {
+  width: "84%",
+  borderRadius: 32,
+  paddingVertical: 34,
+  paddingHorizontal: 24,
+  alignItems: "center",
+  overflow: "hidden",
+  position: "relative",
+},
+
+successGlow: {
+  position: "absolute",
+  top: -60,
+  width: 180,
+  height: 180,
+  borderRadius: 100,
+  backgroundColor: "rgba(0,229,255,0.12)",
+},
+
+successEmoji: {
+  fontSize: 42,
+  marginBottom: 12,
+},
+
+successTitle: {
+  fontSize: 28,
+  fontWeight: "800",
+  color: "#fff",
+  marginBottom: 14,
+},
+
+successText: {
+  fontSize: 16,
+  color: "#CBD5E1",
+  textAlign: "center",
+  lineHeight: 25,
+},
+
+claimBtn: {
+  marginTop: 30,
+  width: "100%",
+  borderRadius: 40,
+  overflow: "hidden",
+},
+
+claimGradient: {
+  paddingVertical: 16,
+  alignItems: "center",
+  borderRadius: 40,
+},
+
+claimText: {
+  color: "#fff",
+  fontSize: 17,
+  fontWeight: "800",
+  letterSpacing: 0.5,
+},
+});   

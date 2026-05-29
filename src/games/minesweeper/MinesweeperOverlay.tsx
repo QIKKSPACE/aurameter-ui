@@ -101,48 +101,54 @@ export default function MinesweeperOverlay({
           )}
 
           <View style={styles.buttonsContainer}>
-            <TouchableOpacity
-              style={[
-                styles.button,
-                {
-                  borderColor: accentColor,
-                },
-              ]}
-              onPress={onTryAgain}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.buttonText}>{isWon ? 'PLAY AGAIN' : 'TRY AGAIN'}</Text>
-            </TouchableOpacity>
-
-            {isWon && (
-              <TouchableOpacity
-                style={[
-                  styles.button,
-                  {
-                    borderColor: MINESWEEPER_COLORS.DIFFICULTY_ACTIVE,
-                  },
-                ]}
-                onPress={onNewGame}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.buttonText}>NEW GAME</Text>
-              </TouchableOpacity>
-            )}
-
+            {/* TRY AGAIN button - for lost state */}
             {!isWon && (
               <TouchableOpacity
                 style={[
                   styles.button,
                   {
-                    borderColor: MINESWEEPER_COLORS.DIFFICULTY_ACTIVE,
+                    backgroundColor: '#2A2A2A',
+                    borderWidth: 0,
                   },
                 ]}
-                onPress={onNewGame}
+                onPress={onTryAgain}
                 activeOpacity={0.7}
               >
-                <Text style={styles.buttonText}>NEW GAME</Text>
+                <Text style={[styles.buttonText, { color: '#FFFFFF' }]}>TRY AGAIN</Text>
               </TouchableOpacity>
             )}
+
+            {/* PLAY AGAIN button - for won state (acts like try again) */}
+            {isWon && (
+              <TouchableOpacity
+                style={[
+                  styles.button,
+                  {
+                    borderColor: accentColor,
+                  },
+                ]}
+                onPress={onTryAgain}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.buttonText}>PLAY AGAIN</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* NEW GAME button */}
+            <TouchableOpacity
+              style={[
+                styles.button,
+                {
+                  backgroundColor: '#1A1A1A',
+                  borderColor: '#4FC3F7',
+                  borderWidth: 2,
+                },
+              ]}
+              onPress={onNewGame}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.buttonText, { color: '#4FC3F7' }]}>NEW GAME</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </View>

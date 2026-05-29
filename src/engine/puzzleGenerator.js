@@ -1,8 +1,9 @@
-import { PUZZLE_SETTINGS } from "./difficulty";
+import { getPuzzleSettings } from "./difficulty";
 
 /* ===================== MAIN ===================== */
 
-export function generatePuzzle() {
+export function generatePuzzle(level = 1) {
+  const settings = getPuzzleSettings(level);
   const cells = {};
   const equations = [];
   const operators = [];
@@ -12,8 +13,8 @@ export function generatePuzzle() {
   let eqId = 0;
 
   const equationCount = rand(
-    PUZZLE_SETTINGS.equationCountRange[0],
-    PUZZLE_SETTINGS.equationCountRange[1]
+    settings.equationCountRange[0],
+    settings.equationCountRange[1]
   );
 
   // first equation
@@ -25,6 +26,7 @@ export function generatePuzzle() {
     equations,
     operators,
     grid,
+    settings,
     cellIdRef: () => `c${cellId++}`,
     eqIdRef: () => `eq${eqId++}`,
   });
@@ -37,13 +39,29 @@ export function generatePuzzle() {
       equations,
       operators,
       grid,
+      settings,
       cellIdRef: () => `c${cellId++}`,
       eqIdRef: () => `eq${eqId++}`,
     });
   }
-applyVisibilityRules(cells);
+  applyVisibilityRules(cells, settings);
 
-  return { cells, equations, operators };
+  return {
+    level,
+    cells,
+    equations,
+    operators,
+    digitRange: {
+      min: settings.numberRange[0],
+      max: Math.max(settings.numberRange[1] * settings.maxTerms, 999),
+    },
+    hints: settings.hints,
+    difficulty: {
+      operators: settings.allowedOperators,
+      equationCount: equations.length,
+      revealChance: settings.revealChance,
+    },
+  };
 }
 
 function placeEquationSafe({
@@ -54,11 +72,12 @@ function placeEquationSafe({
   equations,
   operators,
   grid,
+  settings,
   cellIdRef,
   eqIdRef,
   crossingCell = null,
 }) {
-  const eq = createValidEquation();
+  const eq = createValidEquation(settings);
   const eqId = eqIdRef();
 
   const dx = direction === "H" ? 2 : 0;
@@ -169,6 +188,7 @@ function tryAddCrossingEquationSafe({
   grid,
   cellIdRef,
   eqIdRef,
+  settings,
 }) {
   const candidates = Object.values(cells).filter(
     c => c.editable && c.equations.length < 2
@@ -189,38 +209,41 @@ function tryAddCrossingEquationSafe({
     equations,
     operators,
     grid,
+    settings,
     cellIdRef,
     eqIdRef,
     crossingCell: anchor,
   });
 }
-function createValidEquation() {
+function createValidEquation(settings) {
   const op =
-    PUZZLE_SETTINGS.allowedOperators[
-      rand(0, PUZZLE_SETTINGS.allowedOperators.length - 1)
+    settings.allowedOperators[
+      rand(0, settings.allowedOperators.length - 1)
     ];
+  const termCount = settings.maxTerms >= 3 && Math.random() < 0.28 ? 3 : 2;
+  const [minNumber, maxNumber] = settings.numberRange;
 
   if (op === "+") {
-    const a = rand(1, 50);
-    const b = rand(1, 50);
-    return { values: [a, b], result: a + b, operator: "+" };
+    const values = Array.from({ length: termCount }, () => rand(minNumber, maxNumber));
+    return { values, result: values.reduce((a, b) => a + b, 0), operator: "+" };
   }
 
   if (op === "-") {
-    const a = rand(1, 50);
-    const b = rand(1, a);
-    return { values: [a, b], result: a - b, operator: "-" };
+    const values = Array.from({ length: termCount }, () => rand(minNumber, maxNumber))
+      .sort((a, b) => b - a);
+    return { values, result: values.reduce((a, b) => a - b), operator: "-" };
   }
 
   if (op === "*") {
-    const a = rand(1, 12);
-    const b = rand(1, 12);
-    return { values: [a, b], result: a * b, operator: "*" };
+    const [minMul, maxMul] = settings.multiplyRange;
+    const values = Array.from({ length: termCount }, () => rand(minMul, maxMul));
+    return { values, result: values.reduce((a, b) => a * b, 1), operator: "*" };
   }
 
-  const b = rand(1, 12);
-  const c = rand(1, 12);
-  return { values: [b * c, b], result: c, operator: "/" };
+  const [minDiv, maxDiv] = settings.divisionRange;
+  const divisor = rand(minDiv, maxDiv);
+  const result = rand(minDiv, maxDiv);
+  return { values: [divisor * result, divisor], result, operator: "/" };
 }
 
 function rand(min, max) {
@@ -228,14 +251,14 @@ function rand(min, max) {
 }
 
 
-function applyVisibilityRules(cells) {
+function applyVisibilityRules(cells, settings) {
   const editableCells = Object.values(cells).filter(c => c.editable);
 
   editableCells.forEach(cell => {
     if (cell.equations.length === 2) {
-      cell.value = Math.random() < 0.15 ? cell.solution : null;
+      cell.value = Math.random() < settings.crossingRevealChance ? cell.solution : null;
     } else {
-      cell.value = Math.random() < 0.35 ? cell.solution : null;
+      cell.value = Math.random() < settings.revealChance ? cell.solution : null;
     }
   });
 

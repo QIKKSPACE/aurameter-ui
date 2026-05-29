@@ -1,17 +1,27 @@
 class AudioPlaybackManager {
-  currentPlayer = null;
+  currentController = null;
 
-  play(playerRef) {
-    if (this.currentPlayer && this.currentPlayer !== playerRef) {
-      this.currentPlayer.pause();
+  play(controller) {
+    // stop currently playing audio
+    if (
+      this.currentController &&
+      this.currentController !== controller
+    ) {
+      this.currentController.stop?.();
     }
-    this.currentPlayer = playerRef;
+
+    this.currentController = controller;
   }
 
-  stop(playerRef) {
-    if (this.currentPlayer === playerRef) {
-      this.currentPlayer = null;
+  stop(controller) {
+    if (this.currentController === controller) {
+      this.currentController = null;
     }
+  }
+
+  stopCurrent() {
+    this.currentController?.stop?.();
+    this.currentController = null;
   }
 }
 

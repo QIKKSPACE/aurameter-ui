@@ -63,7 +63,7 @@ const VerifyEmail = ({ navigation, route }) => {
     }
 
     try {
-      const response = await fetch("https://api.aurameter.in/auth/verify-signup", {
+      const response = await fetch("http://localhost:5001/auth/verify-signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email:user.email, code: fullCode }),

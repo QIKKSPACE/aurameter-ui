@@ -72,7 +72,7 @@ const StoryUploadScreen = ({ route }) => {
       setIsLoadingLocation(true);
       try {
         const res = await fetch(
-          `https://api.aurameter.in/places?query=${encodeURIComponent(locationQuery)}`
+          `http://localhost:5001/places?query=${encodeURIComponent(locationQuery)}`
         );
         if (!res.ok) throw new Error("Failed to fetch places");
         const data = await res.json();

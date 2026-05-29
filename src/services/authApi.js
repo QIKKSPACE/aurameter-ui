@@ -1,8 +1,8 @@
 import axios from "axios";
 
-const API_BASE_URL = "https://api.aurameter.in"; // 🔹 replace with your backend URL
+const API_BASE_URL = "http://localhost:5001"; // 🔹 replace with your backend URL
 
-//https://api.aurameter.in
+//http://localhost:5001
 // Refresh the access token using refresh token
 export const refreshWithToken = async (refreshToken,deviceId) => {
   try {

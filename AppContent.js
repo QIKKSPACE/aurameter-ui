@@ -21,9 +21,11 @@
     import { fetchNotifications } from './src/store/notificationSlice'
     import { fetchChats, selectMessageBootstrapBatch } from './src/store/chatSlice'
     import api from './src/services/api'
-    import { updateUserData } from './src/store/userSlice'
+    import { setAchievements, updateUserData } from './src/store/userSlice'
     import { fetchAuraChats } from './src/store/AuraChatSlice'
     import { fetchMessages, syncMessages } from './src/store/messageThunks'
+    import { syncWordLevel } from './src/store/wordGameSlice'
+    import { setLevel } from './src/store/ballSortSlice'
 
 
     const AppContent = () => {
@@ -36,21 +38,40 @@
     const { theme } = useTheme();
     useDeviceId();
 
-    const fetchUser = async () => {
+const fetchUser = async () => {
+  try {
+    if (!userdata?.token) return;
 
-    try {
-    if(!userdata?.token) return;
-      
-    const res = await api.get('/user/refreshUser');
+    const res = await api.get("/user/refreshUser");
+
     if (res?.data?.success) {
-    dispatch(updateUserData(res.data.user));
+
+      // Update user
+      dispatch(updateUserData(res.data.user));
+
+      // Update achievements
+      dispatch(setAchievements(res.data.achievements || []));
+  dispatch(
+        syncWordLevel(
+          res.data.user
+            ?.word_level || 1
+        )
+      );
+    
+   dispatch(
+        setLevel(
+          res.data.user
+            ?.ball_sort_level+1 || 1
+        )
+      );
     } else {
-    console.error("Something went wrong");
+      console.error("Something went wrong");
     }
-    } catch (error) {
+
+  } catch (error) {
     console.error(error);
-    }
-    }; 
+  }
+};
 
 
 
@@ -113,7 +134,7 @@ useEffect(() => {
    if(item.type=="FETCH")
    {
     dispatch(fetchMessages({chatId:item.chatId}))
-   }
+   }  
     if(item.type=="SYNC")
    {
    dispatch(syncMessages({chatId:item.chatId,afterSeq:item.since,sinceId:item?.sinceId}))
@@ -129,7 +150,7 @@ useEffect(() => {
   
   <LogoutModal
     visible={userdata?.isLoggingOut}
-    message={userdata?.authError}
+    message={userdata?.authError}  
   />
   
   <ErrorToast message={toast.message} type={toast.type} theme={theme} />
@@ -148,7 +169,7 @@ useEffect(() => {
   backgroundColor: theme.components.drawer || theme.background.color,
   },
   }}
-  >
+  >  
   <Drawer.Screen name="HomeStack" component={StackNavigator} />
   </Drawer.Navigator>
   </View>

@@ -213,7 +213,7 @@ const isEmpty = !loading && !displayQuizzes.length;
 
               <TextInput
                 placeholder="Quiz Name"
-                placeholderTextColor={theme.text.muted}
+                placeholderTextColor={theme.text.primary}
                 style={[styles.input, { color: theme.text.primary }]}
                 maxLength={50}
                 value={quizName}
@@ -222,7 +222,7 @@ const isEmpty = !loading && !displayQuizzes.length;
 
               <TextInput
                 placeholder="Description (max 200 chars)"
-                placeholderTextColor={theme.text.muted}
+                placeholderTextColor={theme.text.primary}
                 style={[styles.input, { color: theme.text.primary, height: 80 }]}
                 maxLength={200}
                 value={quizDescription}

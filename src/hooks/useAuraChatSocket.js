@@ -11,7 +11,7 @@ export default function useAuraChatSocket(onNewMessage) {
     async function initSocket() {
       const token = await ensureFreshToken(); // ensures fresh JWT
 
-      socketRef.current = io("https://api.aurameter.in/aurachat", {
+      socketRef.current = io("http://localhost:5001/aurachat", {
         auth: { token },
         autoConnect: true, // default true
       });

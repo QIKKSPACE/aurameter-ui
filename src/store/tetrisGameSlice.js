@@ -11,10 +11,10 @@ const MIN_DROP_INTERVAL = 120;
 const LEVEL_SPEED_STEP = 60;
 
 const SCORE_TABLE = {
-  1: 100,
-  2: 300,
-  3: 500,
-  4: 800,
+  1: 1,
+  2: 2,
+  3: 3,
+  4: 4,
 };
 
 /**
@@ -70,6 +70,10 @@ const tetrisGameSlice = createSlice({
     /**
      * Game lifecycle
      */
+    initGame(state) {
+      Object.assign(state, initialState);
+    },
+
     startGame(state) {
       Object.assign(state, {
         ...initialState,
@@ -116,10 +120,7 @@ const tetrisGameSlice = createSlice({
       const lines = action.payload; // 1..4
       if (!SCORE_TABLE[lines]) return;
 
-      const baseScore = SCORE_TABLE[lines];
-      const earnedScore = baseScore * state.level;
-
-      state.score += earnedScore;
+      state.score += SCORE_TABLE[lines];
       state.linesCleared += lines;
 
       // Level update
@@ -127,15 +128,21 @@ const tetrisGameSlice = createSlice({
       state.dropInterval = calculateDropInterval(state.level);
 
       // Aura rewards (checkpoint based)
-      while (state.score - state.lastAuraCheckpoint >= 1000) {
+      while (state.score - state.lastAuraCheckpoint >= 25) {
         state.auraEarned += 1;
-        state.lastAuraCheckpoint += 1000;
+        state.lastAuraCheckpoint += 25;
       }
     },
+       resetScore(state) {
+      state.score = 0;
+     
+    },
+
   },
 });
 
 export const {
+  initGame,
   startGame,
   pauseGame,
   resumeGame,
@@ -144,6 +151,7 @@ export const {
   setCurrentPiece,
   setNextPiece,
   clearLines,
+  resetScore
 } = tetrisGameSlice.actions;
 
 export default tetrisGameSlice.reducer;

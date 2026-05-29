@@ -13,31 +13,26 @@ const ErrorToast = ({ type = "success", message, theme, toastKey }) => {
   const effectiveKey = toastKey ?? message ?? Date.now();
 
 useEffect(() => {
-  if (!message) return;
+  if (message) {
+    // Reset immediately and animate in
+    slideAnim.stopAnimation();
+    fadeAnim.stopAnimation();
+    slideAnim.setValue(-20);
+    fadeAnim.setValue(0);
+    setVisible(true);
 
-  // Reset values immediately
-  slideAnim.stopAnimation();
-  fadeAnim.stopAnimation();
-  slideAnim.setValue(-20);
-  fadeAnim.setValue(0);
-  setVisible(true);
-
-  // Animate in
-  Animated.parallel([
-    Animated.timing(slideAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
-    Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
-  ]).start();
-
-  // Auto-hide
-  const timeout = setTimeout(() => {
+    Animated.parallel([
+      Animated.timing(slideAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
+    ]).start();
+  } else if (visible) {
+    // Animate out when message becomes null
     Animated.parallel([
       Animated.timing(slideAnim, { toValue: -20, duration: 300, useNativeDriver: true }),
       Animated.timing(fadeAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
     ]).start(() => setVisible(false));
-  }, 3000);
-
-  return () => clearTimeout(timeout);
-}, [effectiveKey, message]);
+  }
+}, [message, toastKey]);
 
 
   if (!visible) return null;

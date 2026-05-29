@@ -25,27 +25,35 @@ export function useMinesweeper(initialDifficulty: Difficulty) {
   });
 
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [isTimerRunning, setIsTimerRunning] = useState(false);
   const timerRef = useRef<TimerRef>(null);
   const hasStartedRef = useRef(false);
+  const savedBoardRef = useRef<Cell[][] | null>(null);
+  const lastDifficultyRef = useRef<Difficulty>(initialDifficulty);
 
-  useEffect(() => {
-    if (isTimerRunning && !timerRef.current) {
-      timerRef.current = setInterval(() => {
-        setElapsedSeconds((prev) => prev + 1);
-      }, 1000);
-    } else if (!isTimerRunning && timerRef.current) {
+  const startTimer = useCallback(() => {
+    if (timerRef.current) return; // already running
+    timerRef.current = setInterval(() => {
+      setElapsedSeconds((prev) => prev + 1);
+    }, 1000);
+  }, []);
+
+  const stopTimer = useCallback(() => {
+    if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
+  }, []);
 
+  const resetTimer = useCallback(() => {
+    stopTimer();
+    setElapsedSeconds(0);
+  }, [stopTimer]);
+
+  useEffect(() => {
     return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
+      stopTimer();
     };
-  }, [isTimerRunning]);
+  }, [stopTimer]);
 
   const handleCellTap = useCallback(
     (row: number, col: number) => {
@@ -81,8 +89,17 @@ export function useMinesweeper(initialDifficulty: Difficulty) {
 
           if (!hasStartedRef.current) {
             hasStartedRef.current = true
-            setIsTimerRunning(true)
+            startTimer();
           }
+
+          // Save board state after mines placed but before any reveals
+          savedBoardRef.current = boardWithMines.map(row =>
+            row.map(cell => ({
+              ...cell,
+              state: 'unrevealed' as const,
+              isHitMine: false,
+            }))
+          )
 
           return {
             ...prev,
@@ -98,6 +115,11 @@ export function useMinesweeper(initialDifficulty: Difficulty) {
           const revealedAll = revealAllMines(
             prev.board, config.rows, config.cols
           )
+          // Stop timer immediately when player hits mine
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+          }
           return {
             ...prev,
             board: revealedAll,
@@ -109,6 +131,14 @@ export function useMinesweeper(initialDifficulty: Difficulty) {
           prev.board, row, col, config.rows, config.cols
         )
         const won = checkWin(revealedBoard, config.rows, config.cols, config.mines)
+
+        if (won) {
+          // Stop timer immediately when player wins
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+          }
+        }
 
         return {
           ...prev,
@@ -154,16 +184,39 @@ export function useMinesweeper(initialDifficulty: Difficulty) {
         firstTapDone: false,
       }
     })
-    setElapsedSeconds(0)
-    setIsTimerRunning(false)
+    resetTimer()
+    hasStartedRef.current = false
+  }, [resetTimer]);
 
-    if (timerRef.current) {
-      clearInterval(timerRef.current)
-      timerRef.current = null
+  const handleTryAgain = useCallback(() => {
+    if (!savedBoardRef.current) {
+      handleRestart()
+      return
     }
 
+    const config = DIFFICULTY_CONFIGS[lastDifficultyRef.current]
+
+    // Reset all cells to unrevealed, keep mine positions
+    const resetBoard = savedBoardRef.current.map(row =>
+      row.map(cell => ({
+        ...cell,
+        state: 'unrevealed' as const,
+        isHitMine: false,
+      }))
+    )
+
+    setGameState({
+      board: resetBoard,
+      status: 'idle',
+      difficulty: lastDifficultyRef.current,
+      minesRemaining: config.mines,
+      elapsedSeconds: 0,
+      firstTapDone: true, // mines already placed
+    })
+
+    resetTimer()
     hasStartedRef.current = false
-  }, []);
+  }, [handleRestart, resetTimer])
 
   const handleChangeDifficulty = useCallback(
     (difficulty: Difficulty) => {
@@ -178,17 +231,12 @@ export function useMinesweeper(initialDifficulty: Difficulty) {
         firstTapDone: false,
       })
 
-      setElapsedSeconds(0)
-      setIsTimerRunning(false)
-
-      if (timerRef.current) {
-        clearInterval(timerRef.current)
-        timerRef.current = null
-      }
-
+      resetTimer()
       hasStartedRef.current = false
+      lastDifficultyRef.current = difficulty
+      savedBoardRef.current = null
     },
-    []
+    [resetTimer]
   );
 
   return {
@@ -198,5 +246,6 @@ export function useMinesweeper(initialDifficulty: Difficulty) {
     handleCellLongPress,
     handleRestart,
     handleChangeDifficulty,
+    handleTryAgain,
   };
 }

@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useEffect, useState } from 'react';
-import { ScrollView, View, useWindowDimensions } from 'react-native';
+import { ScrollView, View, useWindowDimensions, TouchableOpacity, Modal, StyleSheet } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ScreenBackground from '../../components/ScreenBackground';
@@ -25,11 +25,15 @@ type Props = {
 export const KenKenGameScreen = ({ navigation, levelId = 1 }: Props) => {
   const insets = useSafeAreaInsets();
   const [showHowToPlay, setShowHowToPlay] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
   const {
     gameState,
     elapsedSeconds,
     hintsUsed,
     isCompleted,
+    hintMessage,
+    highlightedCells,
+    hintCellFlash,
     handleCellPress,
     handleNumberInput,
     handleDelete,
@@ -37,7 +41,6 @@ export const KenKenGameScreen = ({ navigation, levelId = 1 }: Props) => {
     handleUndo,
     handleRedo,
     handleClear,
-    handleTogglePencil,
     handleReset,
     handleNextLevel,
   } = useKenKen(levelId);
@@ -73,6 +76,14 @@ export const KenKenGameScreen = ({ navigation, levelId = 1 }: Props) => {
     navigation.goBack();
   }, [navigation]);
 
+  const handleInfoPress = useCallback(() => {
+    setShowInfo(true);
+  }, []);
+
+  const handleInfoClose = useCallback(() => {
+    setShowInfo(false);
+  }, []);
+
   const handleHomePress = useCallback(() => {
     navigation.goBack();
   }, [navigation]);
@@ -96,7 +107,7 @@ export const KenKenGameScreen = ({ navigation, levelId = 1 }: Props) => {
   return (
     <ScreenBackground>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <KenKenHeader elapsedSeconds={elapsedSeconds} onBack={handleBackPress} />
+        <KenKenHeader elapsedSeconds={elapsedSeconds} onBack={handleBackPress} onInfo={handleInfoPress} />
 
         <View style={{ alignSelf: 'center', marginTop: 8, marginBottom: 8 }}>
           <View
@@ -132,16 +143,33 @@ export const KenKenGameScreen = ({ navigation, levelId = 1 }: Props) => {
               selectedCell={gameState.selectedCell}
               onCellPress={handleCellPress}
               screenWidth={width}
+              highlightedCells={highlightedCells}
+              hintCellFlash={hintCellFlash}
             />
           </View>
         </ScrollView>
 
+        {hintMessage && (
+          <View
+            style={{
+              backgroundColor: '#2C2C2E',
+              borderRadius: 12,
+              padding: 12,
+              marginHorizontal: 24,
+              marginVertical: 8,
+            }}
+          >
+            <AppText style={{ color: '#FFFFFF', fontSize: 13, textAlign: 'center' }}>
+              {hintMessage}
+            </AppText>
+          </View>
+        )}
+
         <KenKenActionBar
           onUndo={handleUndo}
-          onPencil={handleTogglePencil}
           onClear={handleClear}
           onRedo={handleRedo}
-          isPencilMode={gameState.isPencilMode}
+          onHint={handleHint}
         />
 
         <View style={{ paddingBottom: insets.bottom + 16 }}>
@@ -159,6 +187,110 @@ export const KenKenGameScreen = ({ navigation, levelId = 1 }: Props) => {
         />
 
         {showHowToPlay && <KenKenHowToPlay onContinue={handleHowToPlayContinue} />}
+
+        <Modal visible={showInfo} transparent animationType="fade">
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(0,0,0,0.85)',
+              justifyContent: 'center',
+              alignItems: 'center',
+              paddingHorizontal: 24,
+            }}
+          >
+            <ScrollView
+              style={{ maxHeight: '80%' }}
+              contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+              showsVerticalScrollIndicator={false}
+            >
+              <View
+                style={{
+                  backgroundColor: '#1C1C1E',
+                  borderRadius: 20,
+                  padding: 24,
+                  width: width - 48,
+                }}
+              >
+                <AppText style={{ fontSize: 22, fontWeight: '800', color: '#FFFFFF', marginBottom: 20 }}>
+                  How to Play KenKen
+                </AppText>
+
+                <View style={{ marginBottom: 24 }}>
+                  {[
+                    {
+                      title: 'Fill the Grid',
+                      description:
+                        'Place numbers 1 to N in every row and column. N is the grid size (3 for 3×3, 4 for 4×4, etc.)',
+                    },
+                    {
+                      title: 'No Repeats',
+                      description: 'No number can appear twice in the same row or in the same column.',
+                    },
+                    {
+                      title: 'Cage Clues',
+                      description:
+                        'Each outlined cage shows a target and operation. The numbers inside must produce that target.',
+                    },
+                    {
+                      title: 'Operations',
+                      description:
+                        "'+' = add all,  '-' = subtract (2 cells only), '×' = multiply all,  '÷' = divide (2 cells only). A lone number means that cell equals that value.",
+                    },
+                    {
+                      title: 'Tap to Enter',
+                      description:
+                        'Tap a cell to select it, then tap a number from the pad below. Use pencil mode for notes.',
+                    },
+                  ].map((rule, index) => (
+                    <View key={index.toString()} style={{ flexDirection: 'row', marginBottom: 16 }}>
+                      <View
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 16,
+                          backgroundColor: '#8B8FE8',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          marginRight: 12,
+                          marginTop: 2,
+                        }}
+                      >
+                        <AppText style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>
+                          {index + 1}
+                        </AppText>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <AppText style={{ fontSize: 15, fontWeight: '700', color: '#FFFFFF', marginBottom: 4 }}>
+                          {rule.title}
+                        </AppText>
+                        <AppText
+                          style={{ fontSize: 13, fontWeight: '400', color: 'rgba(255,255,255,0.65)', lineHeight: 19 }}
+                        >
+                          {rule.description}
+                        </AppText>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={handleInfoClose}
+                  style={{
+                    height: 50,
+                    borderRadius: 12,
+                    backgroundColor: '#8B8FE8',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginTop: 12,
+                  }}
+                >
+                  <AppText style={{ fontSize: 16, fontWeight: '700', color: '#FFFFFF' }}>Got it!</AppText>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </Modal>
       </SafeAreaView>
     </ScreenBackground>
   );

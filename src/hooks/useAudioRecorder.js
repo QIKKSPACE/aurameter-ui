@@ -1,5 +1,5 @@
-import { useState, useRef } from "react";
-import { Platform } from "react-native";
+import { useState, useRef, useEffect } from "react";
+import { Platform, PermissionsAndroid } from "react-native";
 import Sound from "react-native-nitro-sound";
 
 export const useAudioRecorder = (maxBars = 25) => {
@@ -7,19 +7,59 @@ export const useAudioRecorder = (maxBars = 25) => {
 
   const [isRecording, setIsRecording] = useState(false);
   const [waveform, setWaveform] = useState([]);
-   
+  const [permissionGranted, setPermissionGranted] = useState(null); // 👈 NEW
+
   const startTimeRef = useRef(0);
   const hasListenerRef = useRef(false);
+
+  // --------------------
+  // REQUEST PERMISSION
+  // --------------------
+  const requestPermission = async () => {
+    if (Platform.OS !== "android") {
+      setPermissionGranted(true);
+      return true;
+    }
+
+    try {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO
+      );
+
+      const isGranted = granted === PermissionsAndroid.RESULTS.GRANTED;
+      setPermissionGranted(isGranted);
+
+      return isGranted;
+    } catch (err) {
+      console.error("Permission error:", err);
+      setPermissionGranted(false);
+      return false;
+    }
+  };
 
   // --------------------
   // START RECORDING
   // --------------------
   const startRecording = async () => {
     try {
+      // 🔥 Ask permission FIRST
+      const hasPermission = await requestPermission();
+
+      if (!hasPermission) {
+        console.log("Mic permission denied");
+        return false; // 👈 useful for UI
+      }
+
+      if (isRecording) return true;
+
       setWaveform([]);
       startTimeRef.current = Date.now();
 
-      // ✅ Let Nitro Sound decide file path
+      // Optional safety stop
+      try {
+        await Sound.stopRecorder();
+      } catch (e) {}
+
       await Sound.startRecorder(undefined, undefined, true);
 
       Sound.addRecordBackListener((e) => {
@@ -34,9 +74,12 @@ export const useAudioRecorder = (maxBars = 25) => {
 
       hasListenerRef.current = true;
       setIsRecording(true);
+
+      return true;
     } catch (err) {
       console.error("Failed to start recording:", err);
       setIsRecording(false);
+      return false;
     }
   };
 
@@ -56,13 +99,19 @@ export const useAudioRecorder = (maxBars = 25) => {
 
       setIsRecording(false);
 
-      const duration = (Date.now() - startTimeRef.current) / 1000;
+      const durationMs = Date.now() - startTimeRef.current;
+      if (durationMs < 800) return null;
+
+      const normalizedPath = audioPath.startsWith("file://")
+        ? audioPath
+        : `file://${audioPath}`;
+
       const waveformSnapshot = [...waveform];
 
       return {
-        audioUrl: `file://${audioPath}`,
+        audioUrl: normalizedPath,
         waveform: compressWaveform(waveformSnapshot, SAFE_MAX_BARS),
-        duration,
+        duration: Math.max(1, Math.round(durationMs / 1000)),
       };
     } catch (err) {
       console.error("Failed to stop recording:", err);
@@ -93,12 +142,25 @@ export const useAudioRecorder = (maxBars = 25) => {
     }
   };
 
+  // --------------------
+  // CLEANUP (IMPORTANT)
+  // --------------------
+  useEffect(() => {
+    return () => {
+      if (hasListenerRef.current) {
+        Sound.removeRecordBackListener();
+        hasListenerRef.current = false;
+      }
+    };
+  }, []);
+
   return {
     startRecording,
     stopRecording,
     cancelRecording,
     isRecording,
     waveform,
+    permissionGranted, // 👈 expose to UI
   };
 };
 
@@ -112,6 +174,11 @@ const compressWaveform = (data, bars) => {
 
   return Array.from({ length: bars }).map((_, i) => {
     const slice = data.slice(i * blockSize, (i + 1) * blockSize);
-    return slice.length ? Math.max(...slice) : 0;
+    if (!slice.length) return 0;
+
+    const avg = slice.reduce((a, b) => a + b, 0) / slice.length;
+    const peak = Math.max(...slice);
+
+    return (avg + peak) / 2; // smoother waveform
   });
 };

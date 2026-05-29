@@ -15,7 +15,7 @@ import { useSelector } from "react-redux";
 
 const MEDALS = ["🥇", "🥈", "🥉"];
 
-const CampusLeaderboard = ({ navigation, isProfileCompletion }) => {
+const CampusLeaderboard = ({ navigation, isProfileCompletion, userId }) => {
   const { theme } = useTheme();
  const { data, loading, error } = useSelector(
     state => state.leaderboard.campus
@@ -46,9 +46,10 @@ const CampusLeaderboard = ({ navigation, isProfileCompletion }) => {
             shadowColor: theme.shadow || "#000",
             opacity:theme?.opacity.light
           },
-        ]}
+        ]} 
         onPress={() => {
           if (!isProfileCompletion) {
+            if(item.id == userId) return
             navigation.navigate("OtherProfile", { userId: item.id });
           }
         }}

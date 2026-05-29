@@ -3,7 +3,7 @@ import { ensureFreshToken } from "./tokenManager";
 import { store } from "../store/store";
 
 const api = axios.create({
-  baseURL: "https://api.aurameter.in",
+  baseURL: "http://localhost:5001",
 });
 
 // Attach token before request (no refresh here)

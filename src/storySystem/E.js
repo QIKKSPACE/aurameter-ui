@@ -177,7 +177,7 @@ const HomeScreen = () => {
         lastStory?.media_url?.startsWith("content://") ||
         lastStory?.media_url?.startsWith("https")
           ? lastStory.media_url
-          : `https://api.aurameter.in${lastStory?.media_url}`,
+          : `http://localhost:5001${lastStory?.media_url}`,
     }}
     style={[styles.storyImage, { borderColor: theme.text.accent }]}
   />

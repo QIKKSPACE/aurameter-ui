@@ -8,6 +8,8 @@ interface MathMazeHeaderProps {
   playerScore: number
   timeRemaining: number
   onTimerPress?: () => void
+  onInfoPress?: () => void
+  onGoBack?: () => void
 }
 
 export default function MathMazeHeader({
@@ -15,6 +17,8 @@ export default function MathMazeHeader({
   playerScore,
   timeRemaining,
   onTimerPress,
+  onInfoPress,
+  onGoBack,
 }: MathMazeHeaderProps) {
   const timerDisplay = useMemo(() => {
     const minutes = Math.floor(timeRemaining / 60)
@@ -30,26 +34,46 @@ export default function MathMazeHeader({
     <View style={{ backgroundColor: MathMazeColors.HEADER_BG, paddingHorizontal: 24, paddingVertical: 16 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <View style={{ alignItems: 'center', flex: 0.3 }}>
-          <View
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 22,
-              backgroundColor: MathMazeColors.PLAYER_AVATAR_BG,
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: 4,
-            }}
-          >
-            <Text
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {onGoBack && (
+              <TouchableOpacity
+                onPress={onGoBack}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 10,
+                  backgroundColor: '#1E1E1E',
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.15)',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <Icon name="arrow-left" size={20} color="#FFFFFF" />
+              </TouchableOpacity>
+            )}
+            <View
               style={{
-                fontSize: 16,
-                fontWeight: '700',
-                color: MathMazeColors.PLAYER_NAME_COLOR,
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                backgroundColor: MathMazeColors.PLAYER_AVATAR_BG,
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
             >
-              Y
-            </Text>
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontWeight: '700',
+                  color: MathMazeColors.PLAYER_NAME_COLOR,
+                }}
+              >
+                Y
+              </Text>
+            </View>
           </View>
           <Text
             style={{
@@ -57,6 +81,7 @@ export default function MathMazeHeader({
               fontSize: 13,
               fontWeight: '600',
               marginBottom: 2,
+              marginTop: 4,
             }}
           >
             {displayPlayerName}
@@ -99,26 +124,30 @@ export default function MathMazeHeader({
         </TouchableOpacity>
 
         <View style={{ flex: 0.3, alignItems: 'flex-end' }}>
-          <View
+          <TouchableOpacity
+            onPress={onInfoPress}
             style={{
-              backgroundColor: MathMazeColors.SCORE_BADGE_BG,
-              borderRadius: 10,
-              width: 52,
+              width: 36,
               height: 36,
+              borderRadius: 18,
+              backgroundColor: '#1E1E1E',
+              borderWidth: 1,
+              borderColor: 'rgba(255,255,255,0.25)',
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
             <Text
               style={{
-                color: MathMazeColors.SCORE_BADGE_TEXT,
-                fontSize: 20,
+                fontSize: 16,
                 fontWeight: '700',
+                color: '#8B8FE8',
+                fontStyle: 'italic',
               }}
             >
-              {playerScore}
+              i
             </Text>
-          </View>
+          </TouchableOpacity>
         </View>
       </View>
     </View>

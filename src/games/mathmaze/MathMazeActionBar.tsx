@@ -5,19 +5,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MathMazeColors } from './MathMazeColors'
 
 interface MathMazeActionBarProps {
-  onUndo: () => void
   onClear: () => void
-  onRedo: () => void
-  canUndo: boolean
-  canRedo: boolean
 }
 
 export default function MathMazeActionBar({
-  onUndo,
   onClear,
-  onRedo,
-  canUndo,
-  canRedo,
 }: MathMazeActionBarProps) {
   const insets = useSafeAreaInsets()
 
@@ -28,33 +20,17 @@ export default function MathMazeActionBar({
         paddingHorizontal: 24,
         paddingVertical: 12,
         paddingBottom: Math.max(insets.bottom, 20),
-        gap: 8,
         alignItems: 'center',
+        justifyContent: 'center',
         backgroundColor: MathMazeColors.SCREEN_BG,
       }}
     >
       <TouchableOpacity
-        onPress={onUndo}
-        disabled={!canUndo}
-        style={{
-          width: 48,
-          height: 48,
-          borderRadius: 12,
-          backgroundColor: MathMazeColors.ACTION_BUTTON_BG,
-          alignItems: 'center',
-          justifyContent: 'center',
-          opacity: canUndo ? 1 : 0.5,
-        }}
-      >
-        <Icon name="undo" size={20} color={MathMazeColors.ACTION_BUTTON_TEXT} />
-      </TouchableOpacity>
-
-      <TouchableOpacity
         onPress={onClear}
         style={{
-          flex: 1,
-          height: 48,
-          borderRadius: 12,
+          width: '60%',
+          height: 52,
+          borderRadius: 14,
           backgroundColor: MathMazeColors.ACTION_BUTTON_BG,
           flexDirection: 'row',
           alignItems: 'center',
@@ -62,32 +38,16 @@ export default function MathMazeActionBar({
           gap: 8,
         }}
       >
-        <Icon name="close" size={20} color={MathMazeColors.ACTION_BUTTON_TEXT} />
+        <Icon name="close" size={18} color={MathMazeColors.ACTION_BUTTON_TEXT} />
         <Text
           style={{
             color: MathMazeColors.ACTION_BUTTON_TEXT,
-            fontSize: 14,
-            fontWeight: '700',
+            fontSize: 16,
+            fontWeight: '600',
           }}
         >
           CLEAR
         </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        onPress={onRedo}
-        disabled={!canRedo}
-        style={{
-          width: 48,
-          height: 48,
-          borderRadius: 12,
-          backgroundColor: MathMazeColors.ACTION_BUTTON_BG,
-          alignItems: 'center',
-          justifyContent: 'center',
-          opacity: canRedo ? 1 : 0.5,
-        }}
-      >
-        <Icon name="redo" size={20} color={MathMazeColors.ACTION_BUTTON_TEXT} />
       </TouchableOpacity>
     </View>
   )

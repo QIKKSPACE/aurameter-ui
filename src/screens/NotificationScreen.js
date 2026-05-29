@@ -40,66 +40,143 @@ const NotificationScreen = () => {
       }
     }
   },[notifications])
-  const renderNotification = ({ item }) => {
-    const isProfileCompletion = item.type === "PROFILE_COMPLETION";
+const renderNotification = ({ item }) => {
 
-    const name = isProfileCompletion
+  const isProfileCompletion =
+    item.type === "PROFILE_COMPLETION";
+
+  const isAchievementUnlocked =
+    item.type === "ACHIEVEMENT_UNLOCKED";
+
+  // ---------------- NAME ----------------
+
+  const name =
+    isProfileCompletion || isAchievementUnlocked
       ? "Aurameter"
       : item.actor?.username || "Unknown";
 
-    const message = isProfileCompletion
-      ? item.metadata?.message || "Profile completed"
-      : "started following you";
+  // ---------------- MESSAGE ----------------
 
-    const iconName = isProfileCompletion ? "award" : "user-plus";
-   
-    return (
-      <TouchableOpacity
-        style={[
-          styles.card,
-          {
-            backgroundColor: theme.components.card,
-            opacity: theme.opacity.light,
-          },
-        ]}
-        onPress={()=>{
-         if(!isProfileCompletion)
-         {
-          navigation.navigate("OtherProfile",{userId:item.actor.id})
-         }
-        }}
-      >
-        {item?.actor?.avatar?
-        <Image source={{ uri: `${item?.actor?.avatar}` }} style={styles.avatar} />
-        :
-        <Image source={  require("../assets/login.png")} style={styles.avatar} />
+  let message = "";
 
-      
+  if (isProfileCompletion) {
+    message =
+      item.metadata?.message || "Profile completed";
+  }
+
+  else if (isAchievementUnlocked) {
+    message = `Unlocked achievement "${item.metadata?.title}"`;
+  }
+
+  else {
+    message = "started following you";
+  }
+
+  // ---------------- ICON ----------------
+
+  let iconName = "bell";
+
+  if (isProfileCompletion) {
+    iconName = "award";
+  }
+
+  else if (isAchievementUnlocked) {
+    iconName = "zap";
+  }
+
+  else {
+    iconName = "user-plus";
+  }
+
+  return (
+    <TouchableOpacity
+      style={[
+        styles.card,
+        {
+          backgroundColor: theme.components.card,
+          opacity: theme.opacity.light,
+        },
+      ]}
+      onPress={() => {
+
+        if (
+          !isProfileCompletion &&
+          !isAchievementUnlocked &&
+          item.actor?.id
+        ) {
+          navigation.navigate("OtherProfile", {
+            userId: item.actor.id,
+          });
         }
-
-        <View style={{ flex: 1 }}>
-          <AppText style={[styles.user, { color: theme.text.primary }]} variant="h4">
-            {name}
-          </AppText>
-
-          <AppText style={[styles.message, { color: theme.text.secondary }]} variant="body">
-            {message}
-          </AppText>
-
-          <AppText style={[styles.time, { color: theme.text.secondary }]} variant="caption">
-            {timeAgo(item.created_at)}
-          </AppText>
-        </View>
-
-        <Icon
-          name={iconName}
-          size={20}
-          color={theme.text.accent}
-          style={{ marginLeft: 8 }}
+      }}
+    >
+      {item?.actor?.avatar ? (
+        <Image
+          source={{ uri: item.actor.avatar }}
+          style={styles.avatar}
         />
-      </TouchableOpacity>
-    );
-  };
+      ) : (
+        <Image
+          source={require("../assets/login.png")}
+          style={styles.avatar}
+        />
+      )}
+
+      <View style={{ flex: 1 }}>
+
+        <AppText
+          style={[
+            styles.user,
+            { color: theme.text.primary }
+          ]}
+          variant="h4"
+        >
+          {name}
+        </AppText>
+
+        <AppText
+          style={[
+            styles.message,
+            { color: theme.text.secondary }
+          ]}
+          variant="body"
+        >
+          {message}
+        </AppText>
+
+        {isAchievementUnlocked && (
+          <AppText
+            style={{
+              color: theme.text.accent,
+              fontSize: 11,
+              marginTop: 2,
+            }}
+            variant="caption"
+          >
+            {item.metadata?.rarity}
+          </AppText>
+        )}
+
+        <AppText
+          style={[
+            styles.time,
+            { color: theme.text.secondary }
+          ]}
+          variant="caption"
+        >
+          {timeAgo(item.created_at)}
+        </AppText>
+      </View>
+
+      <Icon
+        name={iconName}
+        size={20}
+        color={theme.text.accent}
+        style={{ marginLeft: 8 }}
+      />
+    </TouchableOpacity>
+  );
+};
 
   const renderContent = () => {
     if (loading) {

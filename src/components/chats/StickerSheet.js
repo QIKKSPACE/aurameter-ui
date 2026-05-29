@@ -25,7 +25,8 @@ const validateLink = (url) => {
   }
   return "";
 };
-export default function StickerBottomSheet({ visible, onClose, onStickerSelect,onQuizSelect }) {
+export default function StickerBottomSheet({ visible, onClose, onStickerSelect,onQuizSelect,  onImageSelect // ✅ NEW
+ }) {
   const sheetRef = useRef(null);
   const insets = useSafeAreaInsets();
   const [selectedImage, setSelectedImage] = useState(null);
@@ -57,6 +58,8 @@ const [linkError, setLinkError] = useState("");
     launchImageLibrary({ mediaType: "photo", quality: 0.8 }, (res) => {
       if (!res.didCancel && res.assets?.length) {
         setSelectedImage(res.assets[0].uri);
+             onImageSelect?.(res.assets[0].uri);   // ✅ SEND BACK
+      sheetRef.current?.dismiss();
       }
     });
   };

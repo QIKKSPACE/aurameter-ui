@@ -15,6 +15,11 @@ export function usePuzzleState() {
     // Prevent editing non-editable cells (clues)
     if (!cell.editable) return;
 
+    if (value === null || value === "") {
+      dispatch(updateCellValue({ cellId, value: null }));
+      return;
+    }
+
     // Clamp value within puzzle digitRange
     const min = puzzle?.level
       ? puzzle.digitRange?.min ?? 0
