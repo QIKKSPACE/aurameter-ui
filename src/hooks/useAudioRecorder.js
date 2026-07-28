@@ -15,73 +15,115 @@ export const useAudioRecorder = (maxBars = 25) => {
   // --------------------
   // REQUEST PERMISSION
   // --------------------
-  const requestPermission = async () => {
-    if (Platform.OS !== "android") {
+ const requestPermission = async () => {
+  if (Platform.OS !== "android") {
+    setPermissionGranted(true);
+    return {
+      granted: true,
+      wasAlreadyGranted: true,
+    };
+  }
+
+  try {
+    const alreadyGranted = await PermissionsAndroid.check(
+      PermissionsAndroid.PERMISSIONS.RECORD_AUDIO
+    );
+
+    if (alreadyGranted) {
       setPermissionGranted(true);
-      return true;
+
+      return {
+        granted: true,
+        wasAlreadyGranted: true,
+      };
     }
 
-    try {
-      const granted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO
-      );
+    const result = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.RECORD_AUDIO
+    );
 
-      const isGranted = granted === PermissionsAndroid.RESULTS.GRANTED;
-      setPermissionGranted(isGranted);
+    const granted =
+      result === PermissionsAndroid.RESULTS.GRANTED;
 
-      return isGranted;
-    } catch (err) {
-      console.error("Permission error:", err);
-      setPermissionGranted(false);
-      return false;
-    }
-  };
+    setPermissionGranted(granted);
+
+    return {
+      granted,
+      wasAlreadyGranted: false,
+    };
+  } catch (err) {
+    console.error(err);
+
+    return {
+      granted: false,
+      wasAlreadyGranted: false,
+    };
+  }
+};
 
   // --------------------
   // START RECORDING
   // --------------------
-  const startRecording = async () => {
-    try {
-      // 🔥 Ask permission FIRST
-      const hasPermission = await requestPermission();
+ const startRecording = async () => {
+  try {
+    const permission = await requestPermission();
 
-      if (!hasPermission) {
-        console.log("Mic permission denied");
-        return false; // 👈 useful for UI
-      }
-
-      if (isRecording) return true;
-
-      setWaveform([]);
-      startTimeRef.current = Date.now();
-
-      // Optional safety stop
-      try {
-        await Sound.stopRecorder();
-      } catch (e) {}
-
-      await Sound.startRecorder(undefined, undefined, true);
-
-      Sound.addRecordBackListener((e) => {
-        const metering = Math.max(-160, Math.min(0, e.currentMetering ?? -160));
-        const normalized = (metering + 160) / 160;
-
-        setWaveform((prev) => {
-          const next = [...prev, normalized];
-          return next.length > SAFE_MAX_BARS ? next.slice(1) : next;
-        });
-      });
-
-      hasListenerRef.current = true;
-      setIsRecording(true);
-
-      return true;
-    } catch (err) {
-      console.error("Failed to start recording:", err);
-      setIsRecording(false);
+    // User denied permission
+    if (!permission.granted) {
+      console.log("Mic permission denied");
       return false;
     }
-  };
+
+    // Permission was just granted from popup
+    // Require user to tap mic again
+    if (!permission.wasAlreadyGranted) {
+      console.log("Mic permission granted. Tap again to record.");
+      return false;
+    }
+
+    if (isRecording) return true;
+
+    setWaveform([]);
+    startTimeRef.current = Date.now();
+
+    try {
+      await Sound.stopRecorder();
+    } catch (_) {}
+
+    await Sound.startRecorder(undefined, undefined, true);
+
+    Sound.addRecordBackListener((e) => {
+      const metering = Math.max(
+        -160,
+        Math.min(0, e.currentMetering ?? -160)
+      );
+
+      const normalized = (metering + 160) / 160;
+
+      setWaveform((prev) => {
+        const next = [...prev, normalized];
+        return next.length > SAFE_MAX_BARS
+          ? next.slice(1)
+          : next;
+      });
+    });
+
+    hasListenerRef.current = true;
+    setIsRecording(true);
+
+    return true;
+  } catch (err) {
+    console.error("Failed to start recording:", err);
+
+    if (hasListenerRef.current) {
+      Sound.removeRecordBackListener();
+      hasListenerRef.current = false;
+    }
+
+    setIsRecording(false);
+    return false;
+  }
+};
 
   // --------------------
   // STOP RECORDING

@@ -68,9 +68,7 @@ const PremiumIRLScreen = () => {
             <Icon name="chevron-left" size={24} color={theme.text.primary} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: theme.text.primary }]}>Aura IRL</Text>
-          <TouchableOpacity>
-            <Icon name="help-circle" size={22} color={theme.text.secondary} />
-          </TouchableOpacity>
+          
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>

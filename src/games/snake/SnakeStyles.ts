@@ -85,6 +85,13 @@ export const createSnakeStyles = (theme: any, boardSize: number) =>
       justifyContent: "space-between",
       marginTop: GAME_CONFIG.CHIP_MARGIN_TOP,
     },
+    speedRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      justifyContent: "center",
+      marginTop: 10,
+      marginHorizontal: -GAME_CONFIG.CHIP_MARGIN_HORIZONTAL,
+    },
     chip: {
       flex: 1,
       marginHorizontal: GAME_CONFIG.CHIP_MARGIN_HORIZONTAL,

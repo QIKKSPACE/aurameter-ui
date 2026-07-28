@@ -1,44 +1,75 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useDispatch, useSelector } from 'react-redux'
 import {
   canMoveTo,
   findFirstMistake,
   getHintArrowDirection,
   getHintExtension,
   getNextExpectedNodeIndex,
-  getPathSegments,
   isComplete,
-  isOnPath,
 } from './ZipEngine'
-import { getLevel } from './ZipLevelConfig'
+import { getLevel, totalLevels } from './ZipLevelConfig'
 import { CellCoord, Direction, ZipGameState } from './ZipTypes'
 import { HINT_EXTENSION_STEPS } from './ZipColors'
+import {
+  collectReward as collectZipReward,
+  completeLevel as completeZipLevel,
+  getZipTodayKey,
+  setCurrentLevel as setZipCurrentLevel,
+  useHint as incrementZipHint,
+  ZIP_MAX_HINTS_PER_LEVEL,
+} from '../../store/zipSlice'
+
+const createGameStateForLevel = (
+  levelId: number,
+  hintsUsed: number,
+  completed: boolean,
+): ZipGameState => {
+  const level = getLevel(levelId)
+
+  return {
+    level,
+    currentPath: completed ? [...level.solution] : [level.nodes[0]],
+    currentNodeIndex: completed ? level.nodes.length - 1 : 0,
+    isComplete: completed,
+    hintsUsed,
+    hintMessage: null,
+    hintArrow: null,
+    elapsedSeconds: 0,
+  }
+}
 
 interface UseZipGameReturn {
   gameState: ZipGameState
   isDragging: boolean
+  rewardScore: number
+  totalScore: number
+  canAdvanceLevel: boolean
   handleDragStart: (row: number, col: number) => void
   handleDragMove: (row: number, col: number) => void
   handleDragEnd: () => void
   handleUndo: () => void
   handleHint: () => void
   handleReset: () => void
+  handleCollectReward: () => void
   initLevel: (levelId: number) => void
   handleNextLevel: () => void
 }
 
 export function useZipGame(): UseZipGameReturn {
+  const dispatch = useDispatch()
+  const zipProgress = useSelector((state: any) => state.zip)
+  const zipProgressRef = useRef(zipProgress)
+  zipProgressRef.current = zipProgress
+
   const [gameState, setGameState] = useState<ZipGameState>(() => {
-    const level = getLevel(1)
-    return {
-      level,
-      currentPath: [level.nodes[0]],
-      currentNodeIndex: 0,
-      isComplete: false,
-      hintsUsed: 0,
-      hintMessage: null,
-      hintArrow: null,
-      elapsedSeconds: 0,
-    }
+    const currentLevelId = zipProgress?.currentLevelId ?? 1
+    const completed = zipProgress?.completedLevelId === currentLevelId
+    return createGameStateForLevel(
+      currentLevelId,
+      zipProgress?.hintsUsed ?? 0,
+      completed,
+    )
   })
 
   const [isDragging, setIsDragging] = useState(false)
@@ -47,7 +78,7 @@ export function useZipGame(): UseZipGameReturn {
   const hintedCellsRef = useRef<Set<string>>(new Set())
   
   // FIX 1: Track current level ID with ref to prevent stale closures in handleNextLevel
-  const currentLevelIdRef = useRef(1)
+  const currentLevelIdRef = useRef(zipProgress?.currentLevelId ?? 1)
   
   // FIX 2: gameStateRef to prevent stale closures in PanResponder
   const gameStateRef = useRef(gameState)
@@ -91,6 +122,8 @@ export function useZipGame(): UseZipGameReturn {
 
   const handleDragStart = useCallback(
     (row: number, col: number) => {
+      if (gameStateRef.current.isComplete) return
+
       const firstNode = gameStateRef.current.level.nodes[0]
       const currentPath = gameStateRef.current.currentPath
       const currentLast = currentPath[currentPath.length - 1]
@@ -193,6 +226,13 @@ export function useZipGame(): UseZipGameReturn {
             }, 1500)
           } else {
             // All cells covered - complete!
+            const completedLevelId = currentGameState.level.id
+            dispatch(
+              completeZipLevel({
+                levelId: completedLevelId,
+                reward: completedLevelId,
+              })
+            )
             setGameState((prev) => ({
               ...prev,
               currentPath: newPath,
@@ -211,7 +251,7 @@ export function useZipGame(): UseZipGameReturn {
         }
       }
     },
-    []  // Empty dependency array - use refs for all state
+    [dispatch]  // Empty dependency array - use refs for all state
   )
 
   const handleDragEnd = useCallback(() => {
@@ -219,6 +259,7 @@ export function useZipGame(): UseZipGameReturn {
   }, [])
 
   const handleUndo = useCallback(() => {
+    if (gameStateRef.current.isComplete) return
     if (gameState.currentPath.length <= 1) return
 
     const newPath = gameState.currentPath.slice(0, -1)
@@ -233,6 +274,16 @@ export function useZipGame(): UseZipGameReturn {
   }, [gameState.currentPath, gameState.level.nodes])
 
   const handleHint = useCallback(() => {
+    if (gameStateRef.current.isComplete) return
+
+    if ((zipProgressRef.current?.hintsUsed ?? 0) >= ZIP_MAX_HINTS_PER_LEVEL) {
+      setGameState((prev) => ({
+        ...prev,
+        hintMessage: 'You can use at most 2 hints per level.',
+      }))
+      return
+    }
+
     const mistakeIndex = findFirstMistake(gameState.currentPath, gameState.level.solution)
     let newPath: CellCoord[]
     let message: string
@@ -271,6 +322,8 @@ export function useZipGame(): UseZipGameReturn {
     const nextNodeIndex = getNextExpectedNodeIndex(newPath, gameState.level.nodes)
     const complete = isComplete(newPath, gameState.level)
 
+    dispatch(incrementZipHint())
+
     setGameState((prev) => ({
       ...prev,
       currentPath: newPath,
@@ -288,9 +341,11 @@ export function useZipGame(): UseZipGameReturn {
     hintArrowTimeoutRef.current = setTimeout(() => {
       clearHintArrow()
     }, 3000)
-  }, [gameState.currentPath, gameState.level, clearHintArrow])
+  }, [dispatch, gameState.currentPath, gameState.level, clearHintArrow])
 
   const handleReset = useCallback(() => {
+    if (gameStateRef.current.isComplete) return
+
     setGameState((prev) => ({
       ...prev,
       currentPath: [prev.level.nodes[0]],
@@ -304,37 +359,48 @@ export function useZipGame(): UseZipGameReturn {
 
   const initLevel = useCallback((levelId: number) => {
     // FIX 1: Validate levelId is in range
-    if (levelId < 1 || levelId > 30) return
+    if (levelId < 1 || levelId > totalLevels()) return
     
     stopTimer()
 
-    const level = getLevel(levelId)
-    if (!level) return
+    const todayKey = getZipTodayKey()
+    const isAdvancingToNewLevel = levelId > (zipProgressRef.current?.currentLevelId ?? 1)
+    const isLockedToday =
+      zipProgressRef.current?.completedOn === todayKey && isAdvancingToNewLevel
+    if (isLockedToday) {
+      setGameState((prev) => ({
+        ...prev,
+        hintMessage: 'Only one Zip level per day. Come back tomorrow for the next level.',
+      }))
+      return
+    }
 
     // FIX 1: Update currentLevelIdRef so handleNextLevel always reads current level
     currentLevelIdRef.current = levelId
 
-    setGameState({
-      level,
-      currentPath: [level.nodes[0]],
-      currentNodeIndex: 0,
-      isComplete: false,
-      hintsUsed: 0,
-      hintMessage: null,
-      hintArrow: null,
-      elapsedSeconds: 0,
-    })
+    const levelIsComplete = zipProgressRef.current?.completedLevelId === levelId
+    const hintsUsed = levelIsComplete ? zipProgressRef.current?.hintsUsed ?? 0 : 0
+    setGameState(createGameStateForLevel(levelId, hintsUsed, levelIsComplete))
+    dispatch(setZipCurrentLevel({ levelId, hintsUsed, isComplete: levelIsComplete }))
     hintedCellsRef.current.clear()
     setIsDragging(false)
-  }, [stopTimer])
+  }, [dispatch, stopTimer])
 
   // FIX 1: Add handleNextLevel to hook for use by ZipGameScreen
   // Moved after initLevel to fix TS2448 hoisting error
   const handleNextLevel = useCallback(() => {
     const nextId = currentLevelIdRef.current + 1
-    if (nextId > 30) return
+    const todayKey = getZipTodayKey()
+    if ((zipProgressRef.current?.score ?? 0) > 0) return
+    if (zipProgressRef.current?.completedOn === todayKey) return
+    if (nextId > totalLevels()) return
     initLevel(nextId)
   }, [initLevel])
+
+  const handleCollectReward = useCallback(() => {
+    if ((zipProgressRef.current?.score ?? 0) <= 0) return
+    dispatch(collectZipReward())
+  }, [dispatch])
 
   useEffect(() => {
     if (gameState.isComplete) {
@@ -351,12 +417,19 @@ export function useZipGame(): UseZipGameReturn {
   return {
     gameState,
     isDragging,
+    rewardScore: zipProgress?.score ?? 0,
+    totalScore: zipProgress?.totalScore ?? 0,
+    canAdvanceLevel:
+      gameState.isComplete &&
+      zipProgress?.completedOn !== getZipTodayKey() &&
+      (zipProgress?.score ?? 0) <= 0,
     handleDragStart,
     handleDragMove,
     handleDragEnd,
     handleUndo,
     handleHint,
     handleReset,
+    handleCollectReward,
     initLevel,
     handleNextLevel,
   }

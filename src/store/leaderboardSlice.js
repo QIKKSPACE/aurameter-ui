@@ -20,7 +20,7 @@ export const fetchLeaderboard = createAsyncThunk(
       return rejectWithValue({ type, error: err.message || "Failed to fetch" });
     }
   }
-);
+); 
 
 // ---------------- Initial State ----------------
 const initialState = {

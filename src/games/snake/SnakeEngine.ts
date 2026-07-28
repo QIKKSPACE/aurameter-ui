@@ -87,10 +87,20 @@ export const spawnFood = (
   snake: SnakeSegment[],
   gridSize = GRID_SIZE,
   score = 0,
+  obstacles: Obstacle[] = [],
   random = Math.random,
 ): Food => {
   const head = snake[0];
   const occupied = new Set(snake.map(segment => `${segment.x}:${segment.y}`));
+  
+  obstacles.forEach(obs => {
+    for (let y = obs.y; y < obs.y + obs.height; y++) {
+      for (let x = obs.x; x < obs.x + obs.width; x++) {
+        occupied.add(`${x}:${y}`);
+      }
+    }
+  });
+
   const candidates: Point[] = [];
   const fairCandidates: Point[] = [];
 
@@ -147,7 +157,7 @@ export const initializeGame = (
 
   return {
     snake,
-    food: spawnFood(snake, gridSize, 0, random),
+    food: spawnFood(snake, gridSize, 0, [], random),
     direction: INITIAL_DIRECTION,
     score: 0,
     multiplier: 1,
@@ -310,7 +320,12 @@ export const updateScore = (
   currentScore: number,
   multiplier: number,
   foodKind: FoodKind,
-) => currentScore + FOOD_POINTS[foodKind] * multiplier;
+) =>
+  currentScore +
+  Math.min(
+    FOOD_POINTS[foodKind] * multiplier,
+    5,
+  );
 
 export const getMultiplierFromStreak = (streak: number) =>
   Math.min(GAME_CONFIG.MAX_MULTIPLIER, 1 + Math.floor(streak / 2));

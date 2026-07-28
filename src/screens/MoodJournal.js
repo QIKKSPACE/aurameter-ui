@@ -1,5 +1,5 @@
 // src/screens/MoodJournalScreen.js
-import React, { useState, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -8,31 +8,48 @@ import {
   TextInput,
   Modal,
   AppState,
-  ScrollView,
+  FlatList,
+  ActivityIndicator,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import Icon from "react-native-vector-icons/Feather";
 import { useTheme } from "../constants/context/ThemeContext";
 import ScreenBackground from "../components/ScreenBackground";
 import LinearGradient from "react-native-linear-gradient";
+import api from "../services/api";
+import { useToast } from "../constants/context/ErrorContext";
+import { useDispatch, useSelector } from "react-redux";
+import { updateUserData } from "../store/userSlice";
+import {
+  appendJournalEntries,
+  prependJournalEntry,
+  selectJournalEntries,
+  selectJournalHasMore,
+  selectJournalPage,
+  setJournalEntries,
+  setJournalHasMore,
+  setJournalPage,
+} from "../store/journalSlice";
 
-const STORAGE_KEY = "MOOD_JOURNAL_ENTRIES";
+const PAGE_SIZE = 10;
 
-const MoodJournalScreen = () => {
+const MoodJournalScreen = ({ navigation }) => {
   const { theme } = useTheme();
+  const { showToast } = useToast();
+  const dispatch = useDispatch();
+  const user = useSelector((state) => state.user?.userData);
+  const journalEntries = useSelector(selectJournalEntries);
+  const journalPage = useSelector(selectJournalPage);
+  const journalHasMore = useSelector(selectJournalHasMore);
 
-  const [selectedMood, setSelectedMood] = useState(null);
   const [note, setNote] = useState("");
   const [infoVisible, setInfoVisible] = useState(false);
-
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(journalEntries.length === 0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [loadMoreBlocked, setLoadMoreBlocked] = useState(false);
 
   const appState = useRef(AppState.currentState);
-
-  const moods = ["😀", "😌", "😍", "😔", "😡", "🤔"];
-
-  /* ───────── Time Formatting ───────── */
 
   const formatTime = (date) =>
     date.toLocaleString("en-US", {
@@ -43,7 +60,79 @@ const MoodJournalScreen = () => {
       hour12: true,
     });
 
-  /* ───────── Live Clock (per second) ───────── */
+  const normalizeEntries = (payload) => {
+    const list =
+      payload?.entries ??
+      payload?.journals ??
+      payload?.data ??
+      payload?.items ??
+      payload?.journal ??
+      [];
+
+    return Array.isArray(list) ? list : [];
+  };
+
+  const normalizeJournalItem = (item) => ({
+    id: item?.id?.toString?.() ?? item?._id?.toString?.() ?? Date.now().toString(),
+    note: item?.note ?? item?.text ?? item?.message ?? "",
+    timestamp: item?.timestamp ?? item?.createdAt ?? new Date().toISOString(),
+  });
+
+  const fetchEntries = useCallback(
+    async ({ pageToLoad = 1, append = false, silent = false } = {}) => {
+      if (!silent) {
+        if (append) {
+          setLoadingMore(true);
+        }
+      }
+
+      try {
+        const response = await api.get("/journal", {
+          params: {
+            page: pageToLoad,
+            limit: PAGE_SIZE,
+          },
+        });
+
+        const normalized = normalizeEntries(response?.data).map(normalizeJournalItem);
+        const nextHasMore =
+          response?.data?.hasMore ??
+          response?.data?.nextPage ??
+          normalized.length === PAGE_SIZE;
+
+        if (append) {
+          dispatch(appendJournalEntries(normalized));
+        } else {
+          dispatch(setJournalEntries(normalized));
+        }
+        dispatch(setJournalPage(pageToLoad));
+        dispatch(setJournalHasMore(Boolean(nextHasMore)));
+        setLoadMoreBlocked(false);
+      } catch (error) {
+        console.log("Journal fetch error:", error?.response?.data || error);
+        showToast("Failed to load journal entries", "error");
+        if (append) {
+          setLoadMoreBlocked(true);
+          dispatch(setJournalHasMore(false));
+        }
+      } finally {
+        if (!silent) {
+          setLoading(false);
+          setLoadingMore(false);
+        }
+      }
+    },
+    [dispatch, showToast],
+  );
+
+  useEffect(() => {
+    if (journalEntries.length > 0) {
+      setLoading(false);
+      return;
+    }
+
+    fetchEntries({ pageToLoad: 1 });
+  }, [fetchEntries, journalEntries.length]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -52,8 +141,6 @@ const MoodJournalScreen = () => {
 
     return () => clearInterval(interval);
   }, []);
-
-  /* ───────── Foreground Reset ───────── */
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", (nextState) => {
@@ -69,42 +156,67 @@ const MoodJournalScreen = () => {
     return () => sub.remove();
   }, []);
 
-  /* ───────── Load Stored Entries ───────── */
-
-  useEffect(() => {
-     //AsyncStorage.removeItem(STORAGE_KEY);
-    loadEntries();
-  }, []);
-
-  const loadEntries = async () => {
-    const stored = await AsyncStorage.getItem(STORAGE_KEY);
-    if (stored) setEntries(JSON.parse(stored));
-  };
-
-  /* ───────── Submit Entry ───────── */
-
   const handleSubmit = async () => {
-    if (selectedMood === null || !note.trim()) return;
+    const trimmedNote = note.trim();
+    if (!trimmedNote || submitting) return;
 
-    const entry = {
-      id: Date.now().toString(),
-      mood: moods[selectedMood],
-      note,
-      timestamp: new Date().toISOString(), // LOCKED
-    };
+    setSubmitting(true);
+    try {
+      const response = await api.post("/journal", {
+        note: trimmedNote,
+      });
 
-    const updated = [entry, ...entries];
-    setEntries(updated);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      if (response?.data?.success) {
+        const createdEntry = normalizeJournalItem(
+          response?.data?.journal ??
+            response?.data?.entry ??
+            response?.data?.data ??
+            {
+              note: trimmedNote,
+              timestamp: new Date().toISOString(),
+            },
+        );
 
-    setNote("");
-    setSelectedMood(null);
+        dispatch(prependJournalEntry(createdEntry));
+        setNote("");
+        setLoadMoreBlocked(false);
+
+        dispatch(
+          updateUserData({
+            aura: (user?.aura || 0) + 2,
+          }),
+        );
+
+        showToast("Journal saved successfully", "success");
+      } else {
+        showToast(response?.data?.message || "Failed to save journal", "error");
+      }
+    } catch (error) {
+      console.log("Journal submit error:", error?.response?.data || error);
+      showToast("Failed to save journal", "error");
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  const loadMoreEntries = () => {
+    if (loadingMore || loading || !journalHasMore || loadMoreBlocked) return;
+    fetchEntries({ pageToLoad: journalPage + 1, append: true });
+  };
+
+  if (loading) {
+    return (
+      <ScreenBackground>
+        <View style={styles.loaderContainer}>
+          <ActivityIndicator size="large" color="#00E5FF" />
+        </View>
+      </ScreenBackground>
+    );
+  }
 
   return (
     <ScreenBackground>
       <View style={styles.container}>
-        {/* Header */}
         <View style={styles.headerRow}>
           <TouchableOpacity
             style={{
@@ -112,6 +224,7 @@ const MoodJournalScreen = () => {
               alignItems: "center",
               justifyContent: "center",
             }}
+            onPress={() => navigation.goBack()}
           >
             <Icon name="arrow-left" size={22} color={theme.text.primary} />
             <Text
@@ -129,7 +242,6 @@ const MoodJournalScreen = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Mood Card */}
         <View style={styles.cardWrapper}>
           <View
             style={[
@@ -149,20 +261,20 @@ const MoodJournalScreen = () => {
             <Text
               style={[styles.questionText, { color: theme.text.primary }]}
             >
-              What’s your mood today?
+              What's on your mind today?
             </Text>
 
-            {/* Live Clock */}
             <Text style={[styles.dateText, { color: theme.text.primary }]}>
               {formatTime(currentTime)}
             </Text>
 
-            {/* Input Box */}
             <TextInput
               placeholder="Write your thoughts..."
               placeholderTextColor={theme.text.secondary}
               value={note}
               onChangeText={setNote}
+              multiline={true}
+              textAlignVertical="top"
               style={[
                 styles.inputBox,
                 {
@@ -171,74 +283,66 @@ const MoodJournalScreen = () => {
                 },
               ]}
             />
-
-            {/* Mood options */}
-            <View style={styles.moodRow}>
-              {moods.map((mood, idx) => (
-                <TouchableOpacity
-                  key={idx}
-                  style={[
-                    styles.moodOption,
-                    {
-                      borderColor:
-                        selectedMood === idx
-                          ? theme.text.accent
-                          : "transparent",
-                    },
-                  ]}
-                  onPress={() => setSelectedMood(idx)}
-                >
-                  <Text style={styles.moodEmoji}>{mood}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
           </View>
         </View>
 
-        {/* Submit Button */}
         <TouchableOpacity
           style={[
             styles.submitBtn,
-            { borderColor: theme.text.accent },
+            { borderColor: theme.text.accent, opacity: submitting ? 0.7 : 1 },
           ]}
           onPress={handleSubmit}
+          disabled={submitting}
         >
           <Text style={[styles.submitText, { color: theme.text.primary }]}>
-            Submit
+            {submitting ? "Posting..." : "Submit"}
           </Text>
         </TouchableOpacity>
 
-        {/* Previous Entries */}
-        <ScrollView contentContainerStyle={{marginVertical:20}}>
-          {entries.map((item) => (
+        <FlatList
+          data={journalEntries}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ marginVertical: 20 }}
+          onEndReached={loadMoreEntries}
+          onEndReachedThreshold={0.35}
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={styles.footerLoader}>
+                <ActivityIndicator size="small" color="#00E5FF" />
+              </View>
+            ) : null
+          }
+          renderItem={({ item }) => (
             <View
-              key={item.id}
               style={[
                 styles.cardsiaplay,
                 {
                   backgroundColor: theme.components.card,
                   marginBottom: 12,
-                  alignSelf:'center'
+                  alignSelf: "center",
                 },
               ]}
             >
-               <Text style={{ fontSize: 22 }}>{item.mood}</Text>
-              <View style={{marginLeft:20}}>
-   <Text style={{ marginVertical: 8, color: theme.text.primary }}>
-                {item.note}
-              </Text>
-              <Text style={{ fontSize: 12, opacity: 0.6,color:theme.text.primary }}>
-                {formatTime(new Date(item.timestamp))}
-              </Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ marginVertical: 4, color: theme.text.primary }}>
+                  {item.note}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 12,
+                    opacity: 0.6,
+                    color: theme.text.primary,
+                    marginTop: 6,
+                  }}
+                >
+                  {formatTime(new Date(item.timestamp))}
+                </Text>
               </View>
-             
-           
             </View>
-          ))}
-        </ScrollView>
+          )}
+        />
       </View>
 
-      {/* Info Modal */}
       <Modal visible={infoVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <LinearGradient
@@ -249,8 +353,8 @@ const MoodJournalScreen = () => {
             <Text style={styles.modalText}>
               This space is designed to act as a diary to your life.
               {"\n\n"}
-              Whatever you write exact date and time will be recorded.
-              Once added, this cannot be edited or changed.
+              Whatever you write exact date and time will be recorded. Once
+              added, this cannot be edited or changed.
             </Text>
             <TouchableOpacity
               style={styles.modalBtn}
@@ -270,12 +374,17 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
+  loaderContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 16,
     justifyContent: "space-between",
-    width:'100%'
+    width: "100%",
   },
   title: {
     fontSize: 20,
@@ -285,6 +394,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginVertical: 20,
+    width: "100%",
   },
   glowLayer: {
     position: "absolute",
@@ -302,15 +412,14 @@ const styles = StyleSheet.create({
     elevation: 5,
     alignItems: "center",
   },
-  cardsiaplay:{
+  cardsiaplay: {
     width: "95%",
     padding: 20,
     borderWidth: 1,
     borderRadius: 16,
     elevation: 5,
     alignItems: "center",
-
-    flexDirection:'row'
+    flexDirection: "row",
   },
   questionText: {
     fontSize: 16,
@@ -324,30 +433,12 @@ const styles = StyleSheet.create({
   },
   inputBox: {
     width: "100%",
-    height: 45,
+    minHeight: 100,
+    maxHeight: 160,
     borderRadius: 8,
-    paddingHorizontal: 10,
-    marginBottom: 20,
-  },
-  moodRow: {
-  flexDirection: "row",
-  justifyContent: "center",  // keeps them grouped in the middle
-  flexWrap: "wrap",          // (optional) lets them wrap on small screens
-  marginTop: 8,
-},
-
-moodOption: {
-  width: 50,
-  height: 50,
-  borderRadius: 25,
-  borderWidth: 2,
-  justifyContent: "center",
-  alignItems: "center",
-  marginHorizontal: 8,   // equal spacing between emojis
-},
-  moodEmoji: {
-    fontSize: 28,
-    textAlign: "center",
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 10,
   },
   submitBtn: {
     borderWidth: 1,
@@ -360,7 +451,10 @@ moodOption: {
     fontSize: 16,
     fontWeight: "600",
   },
-  
+  footerLoader: {
+    paddingVertical: 16,
+    alignItems: "center",
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.6)",

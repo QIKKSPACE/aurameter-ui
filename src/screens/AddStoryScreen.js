@@ -1,298 +1,354 @@
-// screens/AddStoryScreen.js
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
+  StyleSheet,
   View,
   Text,
   TouchableOpacity,
-  FlatList,
-  Image,
-  StyleSheet,
-  AppState,
-  Linking,
   ActivityIndicator,
-  Platform,
+  Linking,
+  Alert,
   Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { 
+  Camera, 
+  useCameraDevice, 
+  useCameraPermission, 
+  useCameraFormat 
+} from "react-native-vision-camera";
 import Icon from "react-native-vector-icons/Feather";
-import { useNavigation } from "@react-navigation/native";
-import { CameraRoll } from "@react-native-camera-roll/camera-roll";
-import * as ImagePicker from "react-native-image-picker";
-import { check, request, PERMISSIONS, RESULTS } from "react-native-permissions";
+import { useNavigation, useIsFocused } from "@react-navigation/native";
 import { useTheme } from "../constants/context/ThemeContext";
-import ScreenBackground from "../components/ScreenBackground";
-import CustomModal from "../components/CustomModal";
 
-const { width } = Dimensions.get("window");
-const IMAGE_SIZE = (width - 24) / 3; // For spacing between 3 images
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+// Explicitly calculate a stable 16:9 height for the camera container
+const CAMERA_HEIGHT = (SCREEN_WIDTH * 16) / 9; 
 
 const AddStoryScreen = () => {
   const navigation = useNavigation();
+  const isFocused = useIsFocused();
   const { theme } = useTheme();
-  const [photos, setPhotos] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [endCursor, setEndCursor] = useState(null);
-  const [hasNextPage, setHasNextPage] = useState(true);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [modalData, setModalData] = useState({ title: "", message: "", onConfirm: null });
-  const [hasAttemptedPermission, setHasAttemptedPermission] = useState(false);
-  const appStateRef = useRef(AppState.currentState);
+  
+  const { hasPermission, requestPermission } = useCameraPermission();
 
-  // Show modal
-  const showModal = (title, message, onConfirm = null) => {
-    setModalData({ title, message, onConfirm });
-    setModalVisible(true);
-  };
+  const cameraRef = useRef(null);
+  const [cameraPosition, setCameraPosition] = useState("back");
+  const [flash, setFlash] = useState("off");
+  const [zoom, setZoom] = useState(1);
+  const [isTakingPhoto, setIsTakingPhoto] = useState(false);
 
-  // Handle permissions
-  const requestFilePermission = async () => {
-    const permission =
-      Platform.OS === "ios"
-        ? PERMISSIONS.IOS.PHOTO_LIBRARY
-        : PERMISSIONS.ANDROID.READ_MEDIA_IMAGES;
+  const device = useCameraDevice(cameraPosition);
 
-    const result = await check(permission);
-
-    if (result === RESULTS.GRANTED) {
-      setHasAttemptedPermission(true);
-      return;
-    } else if (result === RESULTS.DENIED) {
-      const requestResult = await request(permission);
-      if (requestResult === RESULTS.GRANTED) {
-        setHasAttemptedPermission(true);
-      } else {
-        showModal(
-          "Permission Required",
-          "We need access to your photos to upload stories. Please enable it in settings.",
-          () => Linking.openSettings()
-        );
-      }
-    } else if (result === RESULTS.BLOCKED) {
-      showModal(
-        "Permission Required",
-        "We need access to your photos to upload stories. Please enable it in settings.",
-        () => Linking.openSettings()
-      );
-    }
-  };
-
-  // Fetch photos
-  const fetchImages = async (nextCursor = null) => {
-    if (loading || !hasNextPage) return;
-    setLoading(true);
-
-    try {
-      const result = await CameraRoll.getPhotos({
-        first: 30,
-        after: nextCursor,
-        assetType: "Photos",
-      });
-
-      if (!nextCursor) {
-        setPhotos(result.edges);
-      } else {
-        setPhotos((prev) => [...prev, ...result.edges]);
-      }
-
-      setEndCursor(result.page_info.end_cursor);
-      setHasNextPage(result.page_info.has_next_page);
-    } catch (error) {
-      console.error("Error fetching images:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Explicitly query for a standard 16:9 aspect ratio from hardware
+  const format = useCameraFormat(device, [
+    { videoAspectRatio: 16 / 9 },
+    { photoAspectRatio: 16 / 9 }
+  ]);
 
   useEffect(() => {
-    if (hasAttemptedPermission) {
-      fetchImages();
-    } else {
-      requestFilePermission();
-
-      const subscription = AppState.addEventListener("change", async (nextAppState) => {
-        if (
-          appStateRef.current.match(/inactive|background/) &&
-          nextAppState === "active"
-        ) {
-          const permission =
-            Platform.OS === "ios"
-              ? PERMISSIONS.IOS.PHOTO_LIBRARY
-              : PERMISSIONS.ANDROID.READ_MEDIA_IMAGES;
-
-          const result = await check(permission);
-
-          if (result === RESULTS.GRANTED) {
-            setPhotos([]);
-            setEndCursor(null);
-            setHasNextPage(true);
-            setModalVisible(false);
-            fetchImages();
-          }
-        }
-
-        appStateRef.current = nextAppState;
-      });
-
-      return () => subscription.remove();
+    if (device) {
+      setZoom(device.minZoom ?? 1);
     }
-  }, [hasAttemptedPermission]);
+  }, [device]);
 
-  const handleImageSelect = (uri) => {
-    navigation.navigate("StoryUploadScreen", { imageUri: uri });
+  const isFlashAvailable = device?.hasFlash ?? false;
+  const minZoom = device?.minZoom ?? 1;
+  const maxZoom = Math.min(device?.maxZoom ?? 8, 8);
+
+  useEffect(() => {
+    if (!hasPermission) {
+      requestPermission();
+    }
+  }, [hasPermission, requestPermission]);
+
+  const handleZoomChange = (factor) => {
+    setZoom(Math.max(minZoom, Math.min(factor, maxZoom)));
   };
 
-  const requestCameraPermission = async () => {
-  const permission =
-    Platform.OS === "ios"
-      ? PERMISSIONS.IOS.CAMERA
-      : PERMISSIONS.ANDROID.CAMERA;
+  const toggleCameraPosition = () => {
+    setCameraPosition((prev) => (prev === "back" ? "front" : "back"));
+    setFlash("off"); 
+  };
 
-  const result = await check(permission);
+  const toggleFlash = () => {
+    if (!isFlashAvailable) {
+      Alert.alert("Notice", "Flash is not available on this camera.");
+      return;
+    }
+    setFlash((prev) => (prev === "off" ? "on" : "off"));
+  };
 
-  if (result === RESULTS.GRANTED) return true;
+  const takePhoto = async () => {
+    if (!cameraRef.current || isTakingPhoto) return;
 
-  if (result === RESULTS.DENIED) {
-    const req = await request(permission);
-    return req === RESULTS.GRANTED;
-  }
+    try {
+      setIsTakingPhoto(true);
+      const selectedFlashMode = isFlashAvailable ? flash : "off";
 
-  if (result === RESULTS.BLOCKED) {
-    showModal(
-      "Camera Permission Required",
-      "Please enable camera access in settings.",
-      () => Linking.openSettings()
+      const photo = await cameraRef.current.takePhoto({
+        flash: selectedFlashMode,
+        enableShutterSound: true,
+      });
+
+      if (photo?.path) {
+        const imageUri = `file://${photo.path}`;
+        navigation.replace("StoryUploadScreen", { imageUri });
+      } else {
+        Alert.alert("Error", "Failed to capture image path.");
+      }
+    } catch (error) {
+      console.error("Failed to take photo:", error);
+      Alert.alert("Error", "An error occurred while taking the picture.");
+    } finally {
+      setIsTakingPhoto(false);
+    }
+  };
+
+  if (!hasPermission) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background?.color || "#000" }]}>
+        <View style={styles.permissionContent}>
+          <Icon name="camera-off" size={48} color={theme.text.accent || "#ff4757"} />
+          <Text style={[styles.title, { color: theme.text.primary }]}>Camera Access Required</Text>
+          <Text style={[styles.subtitle, { color: theme.text.secondary }]}>
+            To take live photos and post them directly to your story, please enable camera access.
+          </Text>
+          <TouchableOpacity
+            style={[styles.button, { borderColor: theme.text.accent || "#fff" }]}
+            onPress={async () => {
+              const accessGiven = await requestPermission();
+              if (!accessGiven) {
+                Linking.openSettings();
+              }
+            }}
+          >
+            <Text style={[styles.buttonText, { color: theme.text.primary }]}>Grant Access / Settings</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     );
   }
 
-  return false;
-};
-const openCamera = async () => {
-  const allowed = await requestCameraPermission();
-  if (!allowed) return;
-
-  ImagePicker.launchCamera(
-    { mediaType: "photo", saveToPhotos: true },
-    (response) => {
-      if (!response.didCancel && response.assets?.length > 0) {
-        handleImageSelect(response.assets[0].uri);
-      }
-    }
-  );
-}
-
-
-  const renderItem = useCallback(({ item }) => (
-    <TouchableOpacity onPress={() => handleImageSelect(item.node.image.uri)}>
-      <Image source={{ uri: item.node.image.uri }} style={styles.image} />
-    </TouchableOpacity>
-  ), []);
+  if (!device) {
+    return (
+      <View style={[styles.container, styles.center, { backgroundColor: "#000" }]}>
+        <ActivityIndicator size="large" color="#fff" />
+        <Text style={{ color: "#fff", marginTop: 10 }}>Loading camera module...</Text>
+      </View>
+    );
+  }
 
   return (
-    <ScreenBackground>
-      <View style={styles.container} edges={["top"]}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Icon name="x" size={28} color={theme.text.primary} />
-          </TouchableOpacity>
-          <Text style={[styles.title, { color: theme.text.primary }]}>Add Story</Text>
-          <View style={{ width: 28 }} />
-        </View>
-
-        {/* Buttons */}
-      <View style={styles.buttonsRow}>
-          <TouchableOpacity
-            style={[styles.button, { borderColor: theme.text.accent }]}
-            onPress={openCamera}
-          >
-            <Text style={[styles.buttonText, { color: theme.text.primary }]}>
-              Open Camera
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.button, { borderColor: theme.text.accent }]}
-            onPress={() => navigation.navigate("StoryUploadScreen")}
-          >
-            <Text style={[styles.buttonText, { color: theme.text.primary }]}>
-              Create Story
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Recent Label */}
-        <View style={styles.recentRow}>
-          <Text style={[styles.recentText, { color: theme.text.primary }]}>Recent</Text>
-          <Icon name="chevron-down" size={18} color={theme.text.primary} style={{ marginLeft: 4 }} />
-        </View>
-
-        {/* Image Grid */}
-        <FlatList
-          data={photos}
-          renderItem={renderItem}
-          keyExtractor={(item, index) => index.toString()}
-          numColumns={3}
-          columnWrapperStyle={{ justifyContent: "space-between" }}
-          contentContainerStyle={styles.grid}
-          onEndReached={() => fetchImages(endCursor)}
-          onEndReachedThreshold={0.5}
-          ListFooterComponent={loading && <ActivityIndicator size="small" color="#00E5FF" />}
-          showsVerticalScrollIndicator={false}
-        />
-
-        <CustomModal
-          visible={modalVisible}
-          title={modalData.title}
-          message={modalData.message}
-          onClose={() => setModalVisible(false)}
-          onConfirm={modalData.onConfirm}
+    <View style={styles.container}>
+      {/* Centered container with a strict 16:9 box bounding layout */}
+      <View style={styles.cameraContainer}>
+        <Camera
+          ref={cameraRef}
+          style={StyleSheet.absoluteFill}
+          device={device}
+          format={format}
+          isActive={isFocused}
+          photo={true}
+          zoom={zoom}
         />
       </View>
-    </ScreenBackground>
+
+      {/* Top Header Overlay */}
+      <SafeAreaView style={styles.headerOverlay}>
+        <TouchableOpacity style={styles.iconButton} onPress={() => navigation.goBack()}>
+          <Icon name="x" size={26} color="#fff" />
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={[styles.iconButton, !isFlashAvailable && styles.disabledButton]} 
+          onPress={toggleFlash}
+          disabled={!isFlashAvailable}
+        >
+          <Icon
+            name={!isFlashAvailable ? "zap-off" : flash === "on" ? "zap" : "zap-off"}
+            size={24}
+            color={!isFlashAvailable ? "rgba(255,255,255,0.4)" : flash === "on" ? "#FFD700" : "#fff"}
+          />
+        </TouchableOpacity>
+      </SafeAreaView>
+
+      {/* Bottom Interface Controls */}
+      <View style={styles.bottomOverlay}>
+        <View style={styles.zoomContainer}>
+          <TouchableOpacity
+            style={[styles.zoomButton, zoom === minZoom && styles.activeZoomButton]}
+            onPress={() => handleZoomChange(minZoom)}
+          >
+            <Text style={styles.zoomText}>1x</Text>
+          </TouchableOpacity>
+          {maxZoom >= minZoom * 2 && (
+            <TouchableOpacity
+              style={[styles.zoomButton, zoom === minZoom * 2 && styles.activeZoomButton]}
+              onPress={() => handleZoomChange(minZoom * 2)}
+            >
+              <Text style={styles.zoomText}>2x</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <View style={styles.controlRow}>
+          <View style={styles.sideButtonSpacer} />
+
+          <TouchableOpacity
+            style={styles.shutterOuter}
+            onPress={takePhoto}
+            disabled={isTakingPhoto}
+          >
+            <View style={[styles.shutterInner, isTakingPhoto && styles.shutterLoading]}>
+              {isTakingPhoto && <ActivityIndicator size="small" color="#000" />}
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.flipButton} onPress={toggleCameraPosition}>
+            <Icon name="refresh-cw" size={24} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
   );
 };
 
 export default AddStoryScreen;
 
-// ----------------- Styles ---------------------
-
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: 0 },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginVertical: 15,
-    paddingHorizontal: 12,
+  container: {
+    flex: 1,
+    backgroundColor: "#000",
+    justifyContent: "center", // Center the camera view box cleanly vertically
   },
-  title: { fontSize: 20, fontWeight: "600" },
-  buttonsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 20,
-    paddingHorizontal: 12,
+  cameraContainer: {
+    width: SCREEN_WIDTH,
+    height: CAMERA_HEIGHT,
+    overflow: "hidden",
+  },
+  center: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  permissionContent: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 32,
+    gap: 16,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  subtitle: {
+    fontSize: 14,
+    textAlign: "center",
+    maxWidth: 290,
+    lineHeight: 22,
   },
   button: {
-    flex: 1,
-    marginHorizontal: 5,
+    marginTop: 10,
+    paddingHorizontal: 20,
     paddingVertical: 12,
     borderWidth: 1.5,
-    borderRadius: 8,
-    alignItems: "center",
+    borderRadius: 12,
   },
-  buttonText: { fontSize: 14, fontWeight: "500" },
-  recentRow: {
+  buttonText: {
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  headerOverlay: {
+    position: "absolute",
+    top: 20,
+    left: 0,
+    right: 0,
     flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
-    paddingHorizontal: 12,
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    zIndex: 10,
   },
-  recentText: { fontSize: 16, fontWeight: "600" },
-  grid: { paddingBottom: 40, paddingHorizontal:4 },
-  image: {
-    width: IMAGE_SIZE,
-    aspectRatio: 9 / 16,
-    borderRadius: 6,
-    marginBottom: 4,
+  iconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  disabledButton: {
+    backgroundColor: "rgba(0,0,0,0.2)",
+    opacity: 0.5,
+  },
+  bottomOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingBottom: 40,
+    alignItems: "center",
+    zIndex: 10,
+  },
+  zoomContainer: {
+    flexDirection: "row",
+    backgroundColor: "rgba(0,0,0,0.5)",
+    borderRadius: 20,
+    padding: 4,
+    marginBottom: 24,
+    gap: 8,
+  },
+  zoomButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  activeZoomButton: {
+    backgroundColor: "rgba(255,255,255,0.2)",
+  },
+  zoomText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  controlRow: {
+    width: SCREEN_WIDTH,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 40,
+  },
+  sideButtonSpacer: {
+    width: 48,
+  },
+  shutterOuter: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 4,
+    borderColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  shutterInner: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  shutterLoading: {
+    backgroundColor: "rgba(255,255,255,0.7)",
+  },
+  flipButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "center",
+    alignItems: "center",
   },
 });

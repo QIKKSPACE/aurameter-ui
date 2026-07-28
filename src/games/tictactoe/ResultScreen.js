@@ -12,7 +12,13 @@ import {
     StyleSheet,
     StatusBar,
     Dimensions,
+    ActivityIndicator,
 } from 'react-native';
+import { useSelector, useDispatch } from 'react-redux';
+import api from '../../services/api';
+import { useToast } from '../../constants/context/ErrorContext';
+import { updateUserData } from '../../store/userSlice';
+import { claimAura } from '../../store/ticTacToeSlice';
 import Animated, {
     FadeInDown,
     FadeInUp,
@@ -106,6 +112,31 @@ const ResultScreen = ({ navigation, route }) => {
         newAchievements = [],
     } = route?.params || {};
     const { theme } = useTicTacToeContext();
+
+    const dispatch = useDispatch();
+    const { showToast } = useToast();
+    const aura = useSelector((state) => state.ticTacToe?.aura || 0);
+    const user = useSelector((state) => state.user);
+    const [collectingAura, React_useState] = React.useState(false);
+    const setCollectingAura = React_useState;
+
+    const handleCollectAura = React.useCallback(async () => {
+        if (collectingAura || aura <= 0) return;
+        try {
+            setCollectingAura(true);
+            const response = await api.post('/game/tic-tac-toe', { aura });
+            if (response?.data?.success) {
+                dispatch(claimAura());
+                dispatch(updateUserData({ aura: (user?.userData?.aura || 0) + aura }));
+                showToast(`You claimed ${aura} Aura.`, 'success');
+            }
+        } catch (err) {
+            console.log('Claim aura error:', err?.response?.data || err.message);
+            showToast('Failed to Claim Aura, Try again', 'error');
+        } finally {
+            setCollectingAura(false);
+        }
+    }, [aura, collectingAura, dispatch, showToast, user?.userData?.aura]);
 
     const isWin = winner === 'X';
     const isLose = winner === 'O';
@@ -221,6 +252,36 @@ const ResultScreen = ({ navigation, route }) => {
                                 </Text>
                             </View>
                         ))}
+                    </Animated.View>
+                )}
+
+                {/* Aura Claim */}
+                {aura > 0 && (
+                    <Animated.View style={[{ width: '100%', marginBottom: 12, padding: 14, borderRadius: 16, alignItems: 'center' }, { backgroundColor: theme.cardBg }]} entering={FadeInDown.delay(950).springify()}>
+                        <Text style={[{ fontSize: 16, fontWeight: '700', marginBottom: 10 }, { color: theme.textColor }]}>
+                            Reward Ready: +{aura} AURA
+                        </Text>
+                        <TouchableOpacity
+                            activeOpacity={0.7}
+                            disabled={collectingAura}
+                            onPress={handleCollectAura}
+                            style={{
+                                backgroundColor: collectingAura ? '#94A3B8' : '#22C55E',
+                                paddingHorizontal: 22,
+                                paddingVertical: 12,
+                                borderRadius: 24,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 8,
+                            }}
+                        >
+                            {collectingAura ? (
+                                <ActivityIndicator size="small" color="#000" />
+                            ) : null}
+                            <Text style={{ fontWeight: '700', color: '#000' }}>
+                                {collectingAura ? 'COLLECTING...' : 'COLLECT AURA'}
+                            </Text>
+                        </TouchableOpacity>
                     </Animated.View>
                 )}
 

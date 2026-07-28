@@ -6,6 +6,8 @@ import {
   TouchableOpacity,
   useWindowDimensions,
   View,
+  Modal,
+  BackHandler,
 } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useNavigation } from "@react-navigation/native";
@@ -45,6 +47,7 @@ import {
 } from "./tetrisEngine";
 import {
   clearLines,
+  claimAuraReward,
   gameOver,
   pauseGame,
   resumeGame,
@@ -52,7 +55,6 @@ import {
   setCurrentPiece,
   setNextPiece,
   startGame,
-  resetScore
 } from "../store/tetrisGameSlice";
 import { useToast } from "../constants/context/ErrorContext";
 import { updateUserData } from "../store/userSlice";
@@ -62,11 +64,12 @@ const DAS_DELAY = 135;
 const ARR_INTERVAL = 38;
 const SOFT_DROP_INTERVAL = 42;
 const CLEAR_ANIMATION_MS = 360;
-const SWIPE_STEP_COOLDOWN = 75;
+const START_COUNTDOWN_SECONDS = 3;
 
 const selectTetrisHud = state => ({
   status: state.tetrisGame.status,
   score: state.tetrisGame.score,
+  auraEarned: state.tetrisGame.auraEarned,
   level: state.tetrisGame.level,
   linesCleared: state.tetrisGame.linesCleared,
   dropInterval: state.tetrisGame.dropInterval,
@@ -228,6 +231,7 @@ export default function TetrisGestureWrapper() {
   const {
     status,
     score,
+    auraEarned,
     level,
     linesCleared,
     dropInterval,
@@ -240,6 +244,7 @@ export default function TetrisGestureWrapper() {
   const [holdPiece, setHoldPiece] = useState(null);
   const [clearingRows, setClearingRows] = useState([]);
   const [clearTrigger, setClearTrigger] = useState(null);
+  const [showExitModal, setShowExitModal] = useState(false);
 
   const boardRef = useRef(board);
   const pieceRef = useRef(currentPiece);
@@ -252,12 +257,6 @@ export default function TetrisGestureWrapper() {
   const lastDropRef = useRef(0);
   const repeatTimeoutRef = useRef(null);
   const repeatIntervalRef = useRef(null);
-  const dragLastXRef = useRef(0);
-  const dragLastYRef = useRef(0);
-  const dragAccumXRef = useRef(0);
-  const dragAccumYRef = useRef(0);
-  const dragMovedRef = useRef(false);
-  const lastSwipeMoveAtRef = useRef(0);
 const user=useSelector(state=>state.user)
 const { showToast } = useToast();
 
@@ -266,6 +265,12 @@ const { showToast } = useToast();
   const boardDim = useSharedValue(0);
   const overlayProgress = useSharedValue(0);
   const ambientPulse = useSharedValue(0);
+  const dragLastX = useSharedValue(0);
+  const dragLastY = useSharedValue(0);
+  const dragAccumX = useSharedValue(0);
+  const dragAccumY = useSharedValue(0);
+  const dragConsumed = useSharedValue(0);
+  const gestureEnabled = useSharedValue(0);
 
   const compactHeight = height < 740;
   const topBarHeight = compactHeight ? 30 : 34;
@@ -290,7 +295,7 @@ const { showToast } = useToast();
   const boardWidth = cellSize * BOARD_WIDTH;
   const boardHeight = cellSize * BOARD_HEIGHT;
 
-  const [countdown, setCountdown] = useState(5);
+  const [countdown, setCountdown] = useState(START_COUNTDOWN_SECONDS);
   const countdownTimerRef = useRef(null);
 
   useEffect(() => {
@@ -302,11 +307,21 @@ const { showToast } = useToast();
   }, [boardDim, overlayProgress, status]);
 
   useEffect(() => {
+    gestureEnabled.value =
+      status === "playing" && currentPiece && !clearingRef.current ? 1 : 0;
+    dragLastX.value = 0;
+    dragLastY.value = 0;
+    dragAccumX.value = 0;
+    dragAccumY.value = 0;
+    dragConsumed.value = 0;
+  }, [currentPiece, dragAccumX, dragAccumY, dragConsumed, dragLastX, dragLastY, gestureEnabled, status]);
+
+  useEffect(() => {
     if (status === "idle") {
-      setCountdown(5);
+      setCountdown(START_COUNTDOWN_SECONDS);
       if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
       
-      let currentCountdown = 5;
+      let currentCountdown = START_COUNTDOWN_SECONDS;
       countdownTimerRef.current = setInterval(() => {
         currentCountdown -= 1;
         setCountdown(currentCountdown);
@@ -334,23 +349,37 @@ const { showToast } = useToast();
     );
   }, [ambientPulse]);
 
+  const handleBackPress = useCallback(() => {
+    if (statusRef.current === "playing" || statusRef.current === "paused") {
+      if (statusRef.current === "playing") {
+        dispatch(pauseGame());
+      }
+      setShowExitModal(true);
+      return true;
+    }
+    navigation.goBack();
+    return true;
+  }, [dispatch, navigation]);
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
+    return () => sub.remove();
+  }, [handleBackPress]);
+
   const syncBoard = useCallback((nextBoard) => {
     boardRef.current = nextBoard;
     setBoardState(nextBoard);
-    dispatch(setBoard(nextBoard));
-  }, [dispatch]);
+  }, []);
 
   const syncPiece = useCallback((piece) => {
     pieceRef.current = piece;
     setCurrentPieceState(piece);
-    dispatch(setCurrentPiece(piece));
-  }, [dispatch]);
+  }, []);
 
   const syncNextPiece = useCallback((piece) => {
     nextPieceRef.current = piece;
     setNextPieceState(piece);
-    dispatch(setNextPiece(piece));
-  }, [dispatch]);
+  }, []);
 
   const initializeGame = useCallback(() => {
     const empty = createEmptyBoard();
@@ -579,78 +608,87 @@ const { showToast } = useToast();
   }, [dispatch]);
 
   const resetDragTracking = useCallback(() => {
-    dragLastXRef.current = 0;
-    dragLastYRef.current = 0;
-    dragAccumXRef.current = 0;
-    dragAccumYRef.current = 0;
-    dragMovedRef.current = false;
-    lastSwipeMoveAtRef.current = 0;
-  }, []);
+    dragLastX.value = 0;
+    dragLastY.value = 0;
+    dragAccumX.value = 0;
+    dragAccumY.value = 0;
+    dragConsumed.value = 0;
+  }, [dragAccumX, dragAccumY, dragConsumed, dragLastX, dragLastY]);
 
-  const handlePanUpdate = useCallback((translationX, translationY) => {
+  const performHorizontalSwipe = useCallback((direction) => {
     if (!canAct()) return;
-
-    const now = Date.now();
-    const deltaX = translationX - dragLastXRef.current;
-    const deltaY = translationY - dragLastYRef.current;
-    dragLastXRef.current = translationX;
-    dragLastYRef.current = translationY;
-    dragAccumXRef.current += deltaX;
-    dragAccumYRef.current += Math.max(0, deltaY);
-
-    if (now - lastSwipeMoveAtRef.current < SWIPE_STEP_COOLDOWN) return;
-
-    const horizontalThreshold = Math.max(14, cellSize * 0.58);
-    const verticalThreshold = Math.max(14, cellSize * 0.58);
-    const absX = Math.abs(dragAccumXRef.current);
-
-    if (absX >= horizontalThreshold && absX > dragAccumYRef.current * 0.85) {
-      const direction = dragAccumXRef.current > 0 ? "right" : "left";
-      moveHorizontal(direction);
-      dragAccumXRef.current = 0;
-      dragAccumYRef.current = 0;
-      dragMovedRef.current = true;
-      lastSwipeMoveAtRef.current = now;
-      return;
-    }
-
-    if (dragAccumYRef.current >= verticalThreshold && dragAccumYRef.current > absX * 0.75) {
-      softDrop();
-      dragAccumYRef.current = 0;
-      dragAccumXRef.current = 0;
-      dragMovedRef.current = true;
-      lastSwipeMoveAtRef.current = now;
-    }
-  }, [canAct, cellSize, moveHorizontal, softDrop]);
-
-  const handlePanEnd = useCallback((translationX, translationY) => {
-    const absX = Math.abs(translationX);
-    const absY = Math.abs(translationY);
-
-    if (!dragMovedRef.current && absX > absY && absX > Math.max(18, cellSize * 0.55)) {
-      moveHorizontal(translationX < 0 ? "left" : "right");
-    } else if (!dragMovedRef.current && translationY > Math.max(18, cellSize * 0.55)) {
-      softDrop();
-    } else if (!dragMovedRef.current && translationY < -Math.max(34, cellSize)) {
-      holdCurrentPiece();
-    }
-
+    dragConsumed.value = 1;
     resetDragTracking();
-  }, [cellSize, holdCurrentPiece, moveHorizontal, resetDragTracking, softDrop]);
+    moveHorizontal(direction);
+  }, [canAct, dragConsumed, moveHorizontal, resetDragTracking]);
+
+  const performSoftSwipe = useCallback(() => {
+    if (!canAct()) return;
+    dragConsumed.value = 1;
+    resetDragTracking();
+    softDrop();
+  }, [canAct, dragConsumed, resetDragTracking, softDrop]);
+
+  const performHoldSwipe = useCallback(() => {
+    if (!canAct()) return;
+    dragConsumed.value = 1;
+    resetDragTracking();
+    holdCurrentPiece();
+  }, [canAct, dragConsumed, holdCurrentPiece, resetDragTracking]);
 
   const panGesture = Gesture.Pan()
-    .minDistance(6)
+    .minDistance(2)
     .onBegin(() => {
       "worklet";
       runOnJS(resetDragTracking)();
     })
     .onUpdate(e => {
       "worklet";
-      runOnJS(handlePanUpdate)(e.translationX, e.translationY);
+      if (!gestureEnabled.value || dragConsumed.value) return;
+
+      const translationX = e.translationX;
+      const translationY = e.translationY;
+      const deltaX = translationX - dragLastX.value;
+      const deltaY = translationY - dragLastY.value;
+      dragLastX.value = translationX;
+      dragLastY.value = translationY;
+      dragAccumX.value += deltaX;
+      dragAccumY.value += Math.max(0, deltaY);
+
+      const horizontalThreshold = Math.max(10, cellSize * 0.3);
+      const verticalThreshold = Math.max(10, cellSize * 0.3);
+      const absX = Math.abs(dragAccumX.value);
+
+      if (absX >= horizontalThreshold && absX > dragAccumY.value * 0.7) {
+        dragConsumed.value = 1;
+        runOnJS(performHorizontalSwipe)(dragAccumX.value > 0 ? "right" : "left");
+        return;
+      }
+
+      if (dragAccumY.value >= verticalThreshold && dragAccumY.value > absX * 0.65) {
+        dragConsumed.value = 1;
+        runOnJS(performSoftSwipe)();
+      }
     })
     .onEnd(e => {
       "worklet";
-      runOnJS(handlePanEnd)(e.translationX, e.translationY);
+      if (dragConsumed.value || !gestureEnabled.value) {
+        runOnJS(resetDragTracking)();
+        return;
+      }
+
+      const absX = Math.abs(e.translationX);
+      const absY = Math.abs(e.translationY);
+
+      if (absX > absY && absX > Math.max(16, cellSize * 0.42)) {
+        runOnJS(performHorizontalSwipe)(e.translationX < 0 ? "left" : "right");
+      } else if (e.translationY > Math.max(16, cellSize * 0.42)) {
+        runOnJS(performSoftSwipe)();
+      } else if (e.translationY < -Math.max(32, cellSize * 0.8)) {
+        runOnJS(performHoldSwipe)();
+      }
+
+      runOnJS(resetDragTracking)();
     });
 
   const tapGesture = Gesture.Tap()
@@ -705,7 +743,7 @@ const { showToast } = useToast();
     >
       <Animated.View style={[styles.ambient, ambientStyle]} />
       <View style={[styles.topBar, { height: topBarHeight }]}>
-        <TouchableOpacity style={styles.iconButton} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={styles.iconButton} onPress={handleBackPress}>
           <Icon name="chevron-left" size={24} color="#f7fbff" />
         </TouchableOpacity>
        
@@ -716,9 +754,13 @@ const { showToast } = useToast();
 
       <View style={[styles.hudRow, { minHeight: hudHeight }]}>
         <MiniPiece label="Hold" piece={holdPiece} />
-          <View style={styles.topScorePill}>
+        <View style={styles.topScorePill}>
           <Text style={styles.topScoreLabel}>Score</Text>
           <Text style={styles.topScoreValue}>{score}</Text>
+        </View>
+        <View style={styles.topScorePill}>
+          <Text style={styles.topScoreLabel}>Aura</Text>
+          <Text style={styles.topScoreValue}>{auraEarned}</Text>
         </View>
         <MiniPiece label="Next" piece={nextPiece} />
       </View>
@@ -791,6 +833,7 @@ const { showToast } = useToast();
                 {status === "paused" ? "Paused" : "Game Over"}
               </Text>
               <Text style={styles.overlayScore}>Score {score}</Text>
+              <Text style={styles.overlaySubscore}>Claimable Aura {auraEarned}</Text>
               <View style={styles.overlayActions}>
                 {status === "paused" ? (
                   <TouchableOpacity style={styles.primaryButton} onPress={togglePause}>
@@ -800,27 +843,25 @@ const { showToast } = useToast();
                 <TouchableOpacity style={styles.secondaryButton} onPress={handleRestart}>
                   <Text style={styles.secondaryButtonText}>Restart</Text>
                 </TouchableOpacity>
-                {score > 0 ? (
+                {auraEarned > 0 ? (
                   <TouchableOpacity style={styles.secondaryButton} onPress={async()=>{
 try {
     const response = await api.post(
       '/game/tetris-game',
       {
-       
-        aura: score,
+        aura: auraEarned,
       },
     );
 
     if (response?.data?.success) {
-      //dispatch(collectReward());
       dispatch(
     updateUserData({
       aura:
-        (user?.userData?.aura || 0) + score,
+        (user?.userData?.aura || 0) + auraEarned,
     })
   );
-  dispatch(resetScore());
-showToast( `You claimed ${score} points.`, "success");
+  dispatch(claimAuraReward());
+showToast( `You claimed ${auraEarned} Aura.`, "success");
     }
   } catch (err) {
     console.log(
@@ -837,7 +878,28 @@ showToast("Failed to Claim  Aura, Try again", "error");
             </>
           )}
         </Animated.View>
-      )}
+      )}      <Modal transparent visible={showExitModal} animationType="fade">
+        <View style={styles.overlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.overlayTitle}>Exit Game?</Text>
+            <Text style={styles.overlayScore}>Your progress in this game will be lost.</Text>
+            <View style={styles.overlayActions}>
+              <TouchableOpacity style={styles.secondaryButton} onPress={() => {
+                setShowExitModal(false);
+                dispatch(resumeGame());
+              }}>
+                <Text style={styles.secondaryButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.primaryButton} onPress={() => {
+                setShowExitModal(false);
+                navigation.goBack();
+              }}>
+                <Text style={styles.primaryButtonText}>Exit</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1061,6 +1123,14 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(5,7,18,0.78)",
     paddingHorizontal: 24,
   },
+  modalContent: {
+    backgroundColor: "rgba(10, 15, 30, 0.95)",
+    padding: 32,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    alignItems: "center",
+  },
   overlayTitle: {
     color: "#f7fbff",
     fontSize: 38,
@@ -1072,6 +1142,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "800",
     marginTop: 10,
+  },
+  overlaySubscore: {
+    color: "rgba(247,251,255,0.62)",
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: 6,
   },
   overlayActions: {
     flexDirection: "row",

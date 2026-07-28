@@ -1,14 +1,19 @@
 import React, { useState } from 'react'
-import { View, useWindowDimensions, SafeAreaView, Modal, ScrollView, Text, TouchableOpacity, ActivityIndicator } from 'react-native'
+import { View, useWindowDimensions, SafeAreaView, Modal, ScrollView, Text, TouchableOpacity,ActivityIndicator } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenBackground from '../../components/ScreenBackground'
 import MathMazeHeader from './MathMazeHeader'
-import MathMazeTarget from './MathMazeTarget'
+import MathMazeTarget from './MathMazeTarget'  
 import MathMazeBoard from './MathMazeBoard'
 import MathMazeActionBar from './MathMazeActionBar'
 import MathMazeOverlay from './MathMazeOverlay'
 import { useMathMaze } from './useMathMaze'
 import { MathMazeColors } from './MathMazeColors'
+import { useDispatch, useSelector } from 'react-redux'
+import { collectReward } from '../../store/mathMazeSlice'
+import { useToast } from '../../constants/context/ErrorContext'
+import { updateUserData } from '../../store/userSlice'
+import api from '../../services/api'
 
 type Props = {
   navigation: {
@@ -25,14 +30,13 @@ export default function MathMazeGameScreen({ navigation }: Props) {
 
   const {
     gameState,
-    isDragging,
     handleCellDragStart,
     handleCellDragEnter,
     handleDragEnd,
     handleClear,
-    handleNextRound,
     highScore,
     handleRestart,
+
   } = useMathMaze(3)
 
   // Safe values with fallbacks
@@ -44,7 +48,10 @@ export default function MathMazeGameScreen({ navigation }: Props) {
   const safePathStatus = gameState?.pathStatus ?? 'idle'
   const safeCurrentResult = gameState?.currentResult ?? null
   const safeIsGameOver = gameState?.isGameOver ?? false
-
+  const dispatch = useDispatch()
+  const { showToast } = useToast();
+  const user=useSelector(state=>state.user)
+  const [collectingReward, setCollectingReward] = useState(false);
   // Loading guard: show spinner until puzzle is generated
   if (!gameState || !gameState.puzzle) {
     return (
@@ -60,47 +67,126 @@ export default function MathMazeGameScreen({ navigation }: Props) {
         </View>
       </ScreenBackground>
     )
+  }  
+  const handleCollectReward = async() => {
+    if (safeScore <= 0) return;
+       
+     try {
+       setCollectingReward(true);
+       const response = await api.post(
+         '/game/math-maze-game',
+         {
+           aura: safeScore,
+         },
+       );
+   
+       if (response?.data?.success) {
+           dispatch(collectReward());
+   
+         dispatch(
+       updateUserData({
+         aura:
+           (user?.userData?.aura || 0) + safeScore,
+       })
+       
+     );
+  
+   showToast( `You claimed ${safeScore} points.`, "success");
+       setCollectingReward(false);
+   
+       }
+     } catch (err) {
+       console.error(
+         'Claim reward error:',
+         err?.response?.data || err.message,
+       );
+   showToast("Failed to Claim  Aura, Try again", "error");
+       setCollectingReward(false);
+     }
   }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: MathMazeColors.SCREEN_BG }}>
       <View style={{ flex: 1, backgroundColor: MathMazeColors.SCREEN_BG }}>
         <MathMazeHeader
-          playerName="You"
           playerScore={safeScore}
+          bestScore={highScore}
           timeRemaining={safeTime}
           onInfoPress={() => setShowInfo(true)}
-          onTimerPress={() => {}}
           onGoBack={navigation.goBack}
         />
 
-        <MathMazeTarget
-          target={safeTarget}
-          currentResult={safeCurrentResult}
-          pathStatus={safePathStatus}
-        />
-
         <View style={{ flex: 1 }}>
-          <MathMazeBoard
-            puzzle={safePuzzle}
-            currentPath={safeCurrentPath}
+          <MathMazeTarget
+            target={safeTarget}
+            currentResult={safeCurrentResult}
             pathStatus={safePathStatus}
-            screenWidth={width}
-            screenHeight={height}
-            onDragStart={handleCellDragStart}
-            onDragEnter={handleCellDragEnter}
-            onDragEnd={handleDragEnd}
           />
-        </View>
 
-        <MathMazeActionBar
-          onClear={handleClear}
-        />
+          <View style={{ flexShrink: 0 }}>
+            <MathMazeBoard
+              puzzle={safePuzzle}
+              currentPath={safeCurrentPath}
+              pathStatus={safePathStatus}
+              screenWidth={width}
+              screenHeight={height}
+              onDragStart={handleCellDragStart}
+              onDragEnter={handleCellDragEnter}
+              onDragEnd={handleDragEnd}
+            />
+          </View>
+
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 24) }}
+            showsVerticalScrollIndicator={false}
+          >
+          {safeScore > 0 && (
+            <View
+              style={{
+                marginHorizontal: 24,
+                marginTop: 12,
+                marginBottom: 8,
+                padding: 16,
+                borderRadius: 16,
+                backgroundColor: '#1C1C1E',
+                borderWidth: 1,
+                borderColor: 'rgba(255,255,255,0.12)',
+              }}
+            >
+              <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700', marginBottom: 6 }}>
+                Total Score: {safeScore}
+              </Text>
+              <Text style={{ color: '#EDE89A', fontSize: 16, fontWeight: '700', marginBottom: 12 }}>
+                Reward Ready: +{safeScore}
+              </Text>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={handleCollectReward}
+                disabled={collectingReward}
+                style={{
+                  backgroundColor: '#00E5CC',
+                  borderRadius: 12,
+                  paddingVertical: 12,
+                  paddingHorizontal: 18,
+                  alignSelf: 'flex-start',
+                }}
+              >
+                <Text style={{ color: '#0D0D0D', fontWeight: '800' }}>COLLECT REWARD</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+         
+          </ScrollView>
+        </View>
 
         <MathMazeOverlay
           visible={safeIsGameOver}
           finalScore={safeScore}
           highScore={highScore}
+          rewardScore={safeScore}
+          onCollectReward={handleCollectReward}
           onRestart={handleRestart}
         />
 
@@ -367,7 +453,7 @@ export default function MathMazeGameScreen({ navigation }: Props) {
                         lineHeight: 18,
                       }}
                     >
-                      Each correct solution earns one point. Score as many as you can before time runs out!
+                  Each correct solution earns one point. Collect your reward anytime after you build it up!
                     </Text>
                   </View>
                 </View>

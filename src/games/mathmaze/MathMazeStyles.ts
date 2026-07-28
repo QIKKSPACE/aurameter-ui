@@ -110,10 +110,10 @@ export const createMathMazeStyles = (screenWidth: number, screenHeight: number, 
       color: MathMazeColors.TARGET_WRONG_COLOR,
     },
     boardContainer: {
-      flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
       paddingHorizontal: 24,
+      paddingVertical: 12,
     },
     boardWrapper: {
       width: screenWidth - 48,

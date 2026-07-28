@@ -107,7 +107,7 @@ const EarnAuraPointsScreen = ({ navigation }) => {
                 />
               ) : (
                 <View style={styles.avatarFallback}>
-                  <Text style={styles.avatarInitial}>
+                  <Text style={styles.avatarInitial} numberOfLines={1}>
                     {(user?.username ?? "?")[0].toUpperCase()}
                   </Text>
                 </View>
@@ -116,8 +116,10 @@ const EarnAuraPointsScreen = ({ navigation }) => {
           </View>
 
           <View style={styles.profileText}>
-            <Text style={styles.username}>{user?.userData?.username ?? "User"}</Text>
-            <Text style={styles.userTagline}>Aura Collector</Text>
+            <Text style={styles.username} numberOfLines={1}>
+              {user?.userData?.username ?? "User"}
+            </Text>
+            
           </View>
 
           {/* Stat chips */}
@@ -141,7 +143,7 @@ const EarnAuraPointsScreen = ({ navigation }) => {
             <View style={styles.statChip}>
               <View style={styles.statChipInner}>
                 <Icon name="star" size={15} color="#C084FC" />
-                <Text style={styles.statValue}>{user?.userData?.redeemPoints ?? 0}</Text>
+                <Text style={styles.statValue}>{user?.userData?.aura  ?? 0}</Text>
               </View>
               <Text style={styles.statLabel}>Redeem</Text>
             </View>

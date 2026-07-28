@@ -6,6 +6,7 @@ type Props = {
   visible: boolean;
   elapsedSeconds: number;
   levelId: number;
+  score: number;
   hintsUsed: number;
   onReplay: () => void;
   onNextLevel: () => void;
@@ -16,6 +17,7 @@ const KenKenVictoryModalComponent = ({
   visible,
   elapsedSeconds,
   levelId,
+  score,
   hintsUsed,
   onReplay,
   onNextLevel,
@@ -144,7 +146,7 @@ const KenKenVictoryModalComponent = ({
         <View style={styles.card}>
           <AppText style={styles.title}>COMPLETED</AppText>
 
-          <AppText style={styles.subtitle}>Puzzle solved!</AppText>
+          <AppText style={styles.subtitle}>Level {levelId} solved!</AppText>
 
           <View style={styles.statsRow}>
             <View style={styles.stat}>
@@ -152,8 +154,8 @@ const KenKenVictoryModalComponent = ({
               <AppText style={styles.statValue}>{formatTime(elapsedSeconds)}</AppText>
             </View>
             <View style={styles.stat}>
-              <AppText style={styles.statLabel}>LEVEL</AppText>
-              <AppText style={styles.statValue}>{levelId}</AppText>
+              <AppText style={styles.statLabel}>SCORE</AppText>
+              <AppText style={styles.statValue}>{score}</AppText>
             </View>
             <View style={styles.stat}>
               <AppText style={styles.statLabel}>HINTS</AppText>
@@ -162,9 +164,6 @@ const KenKenVictoryModalComponent = ({
           </View>
 
           <View style={styles.buttonsRow}>
-            <TouchableOpacity activeOpacity={0.7} onPress={onReplay} style={styles.buttonReplay}>
-              <AppText style={styles.buttonTextReplay}>REPLAY</AppText>
-            </TouchableOpacity>
             <TouchableOpacity activeOpacity={0.7} onPress={onNextLevel} style={styles.buttonNext}>
               <AppText style={styles.buttonTextNext}>NEXT LEVEL</AppText>
             </TouchableOpacity>

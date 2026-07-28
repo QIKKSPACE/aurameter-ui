@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ScrollView,
 } from "react-native";
+import { Linking, Pressable } from "react-native";
 import MaterialIcon from "react-native-vector-icons/MaterialCommunityIcons";
 import Icon from "react-native-vector-icons/Ionicons";
 import Swiper from "react-native-swiper";
@@ -21,6 +22,8 @@ import Maths from "../assets/math.png";
 import Words from "../assets/word.png";
 import Mood from "../assets/mood.png";
 import Balls from "../assets/ballsort.png";
+import { useSelector } from "react-redux";
+import { selectMindBloomBanners } from "../store/bannerSlice";
 
 
 
@@ -54,7 +57,8 @@ const auraTasks = [
 
 const MindbloomDaily = ({ navigation }) => {
   const { theme } = useTheme();
-
+  const mindBloomBanners = useSelector(selectMindBloomBanners);
+  console.log("MindBloom Banners from Redux:", mindBloomBanners);
   const renderTask = ({ item }) => (
     <TouchableOpacity
       style={[
@@ -116,7 +120,20 @@ const MindbloomDaily = ({ navigation }) => {
       </AppText>
     </TouchableOpacity>
   );
+const bannerImages = mindBloomBanners.flatMap(
+  banner => banner?.mindbloom || []
+);
+const openBanner = async banner => {
+  const url = banner?.ctaLinks?.[0];
 
+  if (!url) return;
+
+  try {
+    await Linking.openURL(url);
+  } catch (e) {
+    console.log(e);
+  }
+};
   return (
     <ScreenBackground>
       <ScrollView
@@ -136,17 +153,49 @@ const MindbloomDaily = ({ navigation }) => {
         </View>
 
         {/* Carousel */}
-        <View style={styles.carouselWrapper}>
-          <Swiper autoplay autoplayTimeout={3} showsPagination loop>
-            {[1, 2, 3].map((i) => (
-              <Image
-                key={i}
-                source={{ uri: `https://picsum.photos/700/400?random=${i}` }}
-                style={styles.image}
-              />
-            ))}
-          </Swiper>
-        </View>
+      <View style={styles.carouselWrapper}>
+  {bannerImages.length === 1 ? (
+    <Pressable
+      style={{ flex: 1 }}
+      onPress={() => openBanner(mindBloomBanners[0])}
+    >
+      <Image
+        source={{ uri: bannerImages[0] }}
+        style={styles.image}
+        resizeMode="cover"
+      />
+    </Pressable>
+  ) : (
+    <Swiper
+      autoplay
+      autoplayTimeout={4}
+      showsPagination
+      loop
+      dotStyle={{
+        backgroundColor: "rgba(255,255,255,0.4)",
+      }}
+      activeDotStyle={{
+        backgroundColor: "#fff",
+      }}
+    >
+      {mindBloomBanners.map(banner =>
+        (banner.mindbloom || []).map(image => (
+          <Pressable
+            key={image}
+            style={{ flex: 1 }}
+            onPress={() => openBanner(banner)}
+          >
+            <Image
+              source={{ uri: image }}
+              style={styles.image}
+              resizeMode="cover"
+            />
+          </Pressable>
+        ))
+      )}
+    </Swiper>
+  )}
+</View>
 
         {/* Subtitle */}
         <View

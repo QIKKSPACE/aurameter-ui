@@ -172,15 +172,13 @@ useEffect(() => {
 export default ChatInput;
 
 const styles = StyleSheet.create({
-  wrapper: {
-    position: "absolute",
-    bottom: 0,
-    left: 10,
-    right: 10,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-    overflow: "hidden",
-  },
+ wrapper: {
+  marginHorizontal: 10,
+  marginBottom: 10,
+  borderTopLeftRadius: 12,
+  borderTopRightRadius: 12,
+  overflow: "hidden",
+},
 
   inputRow: {
     height: 50,

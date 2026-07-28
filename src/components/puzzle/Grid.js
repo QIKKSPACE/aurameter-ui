@@ -56,8 +56,9 @@ function Grid({ validationPulse }) {
     >
       {cellsArray.map((cell) => {
         const status = validation.cellStatus[cell.id];
+        const isLocked = !cell.editable;
         const borderColor =
-          !cell.editable
+          isLocked
             ? "rgba(52, 211, 153, 0.9)"
             : status === "correct"
             ? "#22c55e"

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { View, TouchableOpacity, Text } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useDispatch, useSelector } from 'react-redux'
 import { useZipGame } from './useZipGame'
 import { ZipHeader } from './ZipHeader'
 import { ZipBoard } from './ZipBoard'
@@ -10,6 +11,9 @@ import { ZipHowToPlay } from './ZipHowToPlay'
 import { getPathSegments } from './ZipEngine'
 import { COLORS } from './ZipColors'
 import { totalLevels } from './ZipLevelConfig'
+import api from '../../services/api'
+import { updateUserData } from '../../store/userSlice'
+import { useToast } from '../../constants/context/ErrorContext'
 
 type ZipGameScreenProps = {
   navigation?: { goBack: () => void }
@@ -17,19 +21,52 @@ type ZipGameScreenProps = {
 
 export const ZipGameScreen = React.memo(({ navigation }: ZipGameScreenProps) => {
   const insets = useSafeAreaInsets()
+  const dispatch = useDispatch()
+  const { showToast } = useToast()
+  const user = useSelector(state => state.user)
   const [boardAreaWidth, setBoardAreaWidth] = useState(0)
+  const [collectingReward, setCollectingReward] = useState(false)
   const {
     gameState,
-    isDragging,
+    rewardScore,
+    totalScore,
+    canAdvanceLevel,
     handleDragStart,
     handleDragMove,
     handleDragEnd,
     handleUndo,
     handleHint,
     handleReset,
-    initLevel,
+    handleCollectReward,
     handleNextLevel,
   } = useZipGame()
+
+  const handleCollectZipReward = async () => {
+    if (collectingReward || rewardScore <= 0) return
+    setCollectingReward(true)
+
+    try {
+      const response = await api.post('/game/zip-game', {
+        aura: rewardScore,
+        level: gameState.level.id,
+      })
+
+      if (response?.data?.success) {
+        handleCollectReward()
+        dispatch(
+          updateUserData({
+            aura: (user?.userData?.aura || 0) + rewardScore,
+          })
+        )
+        showToast(`You claimed ${rewardScore} points.`, 'success')
+      }
+    } catch (err) {
+      console.log('Claim reward error:', err?.response?.data || err.message)
+      showToast('Failed to Claim Aura, Try again', 'error')
+    } finally {
+      setCollectingReward(false)
+    }
+  }
 
   const hintedCells = useMemo(() => {
     const set = new Set<string>()
@@ -133,7 +170,7 @@ export const ZipGameScreen = React.memo(({ navigation }: ZipGameScreenProps) => 
               }}>
                 {`Time: ${Math.floor(gameState.elapsedSeconds / 60)}:${String(gameState.elapsedSeconds % 60).padStart(2, '0')}`}
               </Text>
-              {gameState.level.id < totalLevels() ? (
+              {gameState.level.id < totalLevels() && canAdvanceLevel ? (
                 <TouchableOpacity
                   activeOpacity={0.7}
                   onPress={handleNextLevel}
@@ -148,6 +185,16 @@ export const ZipGameScreen = React.memo(({ navigation }: ZipGameScreenProps) => 
                     Next Level ({gameState.level.id} / {totalLevels()})
                   </Text>
                 </TouchableOpacity>
+              ) : gameState.level.id < totalLevels() ? (
+                <Text style={{
+                  fontSize: 15,
+                  color: '#F5F5DC',
+                  fontWeight: '600',
+                }}>
+                  {rewardScore > 0
+                    ? 'Collect your reward in the game UI to unlock the next level.'
+                    : 'Come back tomorrow to unlock the next level.'}
+                </Text>
               ) : (
                 <Text style={{
                   fontSize: 16,
@@ -163,20 +210,67 @@ export const ZipGameScreen = React.memo(({ navigation }: ZipGameScreenProps) => 
       </View>
 
       {/* CONTROLS — fixed height */}
+      {rewardScore > 0 && (
+        <View
+          style={{
+            marginHorizontal: 16,
+            marginBottom: 12,
+            padding: 14,
+            borderRadius: 16,
+            backgroundColor: COLORS.MESSAGE_BG,
+            borderWidth: 1,
+            borderColor: 'rgba(245,245,220,0.18)',
+          }}
+        >
+          <Text style={{
+            color: '#FFFFFF',
+            fontSize: 14,
+            fontWeight: '700',
+            marginBottom: 6,
+          }}>
+            Total Score: {totalScore}
+          </Text>
+          <Text style={{
+            color: '#F5F5DC',
+            fontSize: 16,
+            fontWeight: '700',
+            marginBottom: 10,
+          }}>
+            Reward Ready: +{rewardScore}
+          </Text>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            disabled={collectingReward}
+            onPress={handleCollectZipReward}
+            style={{
+              backgroundColor: collectingReward ? '#94A3B8' : '#22C55E',
+              paddingHorizontal: 22,
+              paddingVertical: 12,
+              borderRadius: 24,
+              alignSelf: 'flex-start',
+            }}
+          >
+            <Text style={{ fontWeight: '700', color: '#000' }}>
+              {collectingReward ? 'COLLECTING...' : 'COLLECT REWARD'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <ZipControls
         onUndo={handleUndo}
         onHint={handleHint}
         canUndo={gameState.currentPath.length > 1}
       />
 
-      {/* HINT MESSAGE — fixed height */}
       <ZipHintMessage message={gameState.hintMessage} />
 
-      {/* HOW TO PLAY — collapsed by default to save space */}
       <ZipHowToPlay />
-
     </View>
   )
 })
-
 ZipGameScreen.displayName = 'ZipGameScreen'
+
+
+
+

@@ -6,6 +6,8 @@
  */
 
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { useDispatch } from 'react-redux';
+import { recordMatchResult } from '../../store/ticTacToeSlice';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { checkWinner } from './checkWinner';
 import { getAIMoveForLevel } from './aiEngine';
@@ -30,6 +32,7 @@ const STORAGE_KEYS = {
 };
 
 const useTicTacToe = (initialLevel = 1) => {
+    const dispatch = useDispatch();
     // ─── Board config ───
     const [currentLevel, setCurrentLevel] = useState(initialLevel);
     const levelConfig = useMemo(() => getLevelConfig(currentLevel), [currentLevel]);
@@ -165,6 +168,7 @@ const useTicTacToe = (initialLevel = 1) => {
                     gainedXP = XP_REWARDS.WIN;
                     newStreak = prevStreak + 1;
                     newTotalWins = prevTotalWins + 1;
+                    dispatch(recordMatchResult({ outcome: 'win', levelPoints: levelAtFinish }));
                     if (!newBeatenLevels.includes(levelAtFinish)) {
                         newBeatenLevels.push(levelAtFinish);
                     }
@@ -176,6 +180,7 @@ const useTicTacToe = (initialLevel = 1) => {
                 case 'lose':
                     gainedXP = XP_REWARDS.LOSE;
                     newStreak = 0;
+                    dispatch(recordMatchResult({ outcome: 'lose', levelPoints: levelAtFinish }));
                     break;
             }
 
@@ -230,7 +235,7 @@ const useTicTacToe = (initialLevel = 1) => {
             finishedGameIdRef.current += 1;
             setFinishedGameId(finishedGameIdRef.current);
         },
-        [persist],
+        [persist, dispatch],
     );
 
     // ─── Player move ───

@@ -9,6 +9,8 @@ TouchableOpacity,
 FlatList,
 Image,
 ActivityIndicator,
+KeyboardAvoidingView,
+Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import ScreenBackground from "../components/ScreenBackground";
@@ -50,7 +52,7 @@ const TypingIndicator = ({ theme }) => {
             fontStyle: "italic",
           }}
         >
-          Aura is typing…
+          Aura AI is typing…
         </AppText>
       </View>
     </View>
@@ -318,6 +320,12 @@ styles.bottomBtn,
 
 return (
 <ScreenBackground>
+  <KeyboardAvoidingView
+    style={{ flex: 1 }}
+    behavior={Platform.OS === "ios" ? "padding" : "padding"}
+    keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 24}
+  >
+
 <View  style={styles.container}>
 {/* Header */}
 <View style={styles.header}>
@@ -419,6 +427,8 @@ styles.input,
 </View>
 )}
 </View>
+  </KeyboardAvoidingView>
+
 </ScreenBackground>
 );
 };
@@ -467,15 +477,11 @@ paddingBottom: 120,
 },
 
 bottomLocked: {
-position: "absolute",
-left: 0,
-right: 0,
-bottom: 0,
-paddingHorizontal: 20,
-paddingVertical: 14,
-borderTopWidth: 1,
-alignItems: "center",
-justifyContent: "center",
+  marginHorizontal: 10,
+  marginBottom: 10,
+  borderTopLeftRadius: 12,
+  borderTopRightRadius: 12,
+  overflow: "hidden",
 },
 
 bottomBtn: {

@@ -28,6 +28,7 @@ import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { updateChatLastMessage } from "./src/store/chatSlice";
 import { incrementUnreadChats } from "./src/store/unreadSlice";
+import { shouldIncrementUnreadForMessage } from "./src/utils/unread";
 
 initStoryPollingLifecycle();
 
@@ -97,23 +98,7 @@ store.dispatch(
 
 );
  const state = store.getState();
-    const currentUserId = state.user.userData?.id;
-    const chat = state.chats.chats.find(c => c.chat_id === data?.chatId);
-
-    if (!chat) return;
-
-    // Ignore self messages
-    if (parsedMessage?.sender_id === currentUserId) return;
-
-    const lastSeenSeq = chat.last_seen_seq ?? 0;
-    const lastMessageSeq = chat.last_message_seq ?? 0;
-
-    /**
-     * ✅ Chat already had unread messages IF
-     * last_message_seq > last_seen_seq
-     */
-    const alreadyUnread = lastMessageSeq > lastSeenSeq;
-   if (!alreadyUnread) {
+   if (shouldIncrementUnreadForMessage(state, data.chatId, parsedMessage)) {
       store.dispatch(incrementUnreadChats());
     }
 store.dispatch(
@@ -183,8 +168,8 @@ const handleNotificationNavigation = (data) => {
       navigate("ChatScreen", {
         chat_id: data.chatId,
         other_user_id: data.senderId,
-        other_avatar: data.avatar,
-        other_username: data.username,
+        other_avatar: data.senderAvatar,
+        other_username: data.senderUsername,
       });
       break;
 
@@ -194,7 +179,7 @@ const handleNotificationNavigation = (data) => {
 
     default:
       navigate("Home");
-  }
+  }  
 };
 return (
 <GestureHandlerRootView style={{ flex: 1 }}>

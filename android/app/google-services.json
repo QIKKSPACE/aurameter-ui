@@ -1,13 +1,14 @@
 {
   "project_info": {
-    "project_number": "597392055580",
-    "project_id": "aurameter-5953d",
-    "storage_bucket": "aurameter-5953d.firebasestorage.app"
+    "project_number": "161221212433",
+    "firebase_url": "https://client-01-a6574-default-rtdb.firebaseio.com",
+    "project_id": "client-01-a6574",
+    "storage_bucket": "client-01-a6574.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:597392055580:android:cbb2c07928e31129a76ed9",
+        "mobilesdk_app_id": "1:161221212433:android:a81f3fa272e3a7fa9e34b0",
         "android_client_info": {
           "package_name": "com.aurameter"
         }
@@ -15,7 +16,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBNw2SjWRZLHUBA9sy0zKLrfUxr9DUu2ZA"
+          "current_key": "AIzaSyAzf-DyJhq4R6q_jGDXSxmNrE0twJNC_tg"
         }
       ],
       "services": {

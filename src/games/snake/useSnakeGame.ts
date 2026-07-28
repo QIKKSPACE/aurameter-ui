@@ -7,7 +7,6 @@ import {
   detectObstacleCollision,
   getMultiplierFromStreak,
   getOppositeDirection,
-  getTickSpeed,
   initializeGame,
   isComboActive,
   isSamePoint,
@@ -20,9 +19,12 @@ import {
 import {
   COMBO_WINDOW_MS,
   COUNTDOWN_STEPS,
+  DEFAULT_SPEED_PRESET,
   GRID_SIZE,
   SNAKE_STORAGE_KEY,
+  SPEED_PRESETS,
   SPEED_STEP_SCORE,
+  type SnakeSpeedPresetId,
   type Direction,
   type Point,
   type SnakeGameState,
@@ -63,6 +65,9 @@ export const useSnakeGame = () => {
   const [highScore, setHighScore] = useState(0);
   const [countdownText, setCountdownText] = useState<string | null>("3");
   const [isPaused, setIsPaused] = useState(false);
+  const [selectedSpeedPresetId, setSelectedSpeedPresetId] = useState<SnakeSpeedPresetId>(
+    DEFAULT_SPEED_PRESET,
+  );
   const [foodPulseToken, setFoodPulseToken] = useState(0);
   const [collisionToken, setCollisionToken] = useState(0);
   const [lastEatenPosition, setLastEatenPosition] = useState<Point | null>(null);
@@ -73,7 +78,6 @@ export const useSnakeGame = () => {
   const mountTimeRef = useRef(Date.now());
   const tickCountRef = useRef(0);
   const tapBoostTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const redAppleSpawnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const redAppleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastRedAppleSpawnTimeRef = useRef(0);
   const currentRedAppleSpawnTimeRef = useRef<number | null>(null);
@@ -84,6 +88,7 @@ export const useSnakeGame = () => {
   const countdownTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeCountdownTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const currentDirectionRef = useRef<Direction>(gameState.direction);
+  const speedPresetHydratedRef = useRef(false);
 
   // Update direction ref every render to always have latest direction
   currentDirectionRef.current = gameState.direction;
@@ -142,13 +147,38 @@ export const useSnakeGame = () => {
   }, []);
 
   useEffect(() => {
+    AsyncStorage.getItem(GAME_CONFIG.STORAGE_KEY_SPEED_PRESET)
+      .then(value => {
+        if (!value) return;
+
+        const presetExists = SPEED_PRESETS.some(preset => preset.id === value);
+        if (presetExists) {
+          setSelectedSpeedPresetId(value as SnakeSpeedPresetId);
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        speedPresetHydratedRef.current = true;
+      });
+  }, []);
+
+  useEffect(() => {
+    if (!speedPresetHydratedRef.current) return;
+
+    AsyncStorage.setItem(
+      GAME_CONFIG.STORAGE_KEY_SPEED_PRESET,
+      selectedSpeedPresetId,
+    ).catch(() => undefined);
+  }, [selectedSpeedPresetId]);
+
+  useEffect(() => {
     beginCountdown();
     setIsGameReady(true);
 
     return () => {
       clearCountdownTimer();
     };
-  }, []);
+  }, [beginCountdown, clearCountdownTimer]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", state => {
@@ -171,28 +201,50 @@ export const useSnakeGame = () => {
 
   // Handle speed boost from double-tap on BOOST button
   const handleMultipleTaps = useCallback(() => {
-    // Apply 100ms speed boost (2x speed - double the reduction)
-    setDoubleTapSpeedBoost(100);
+    if (countdownText || isPaused || gameState.gameOver) {
+      return;
+    }
+
+    // Apply an immediate tap boost on every press
+    setTapSpeedBoost(prev => Math.min(prev + GAME_CONFIG.HOLD_SPEED_BOOST_REDUCTION, 150));
+    setDoubleTapSpeedBoost(0);
 
     // Clear existing timer
     if (tapBoostTimerRef.current) {
       clearTimeout(tapBoostTimerRef.current);
     }
 
-    // Remove boost after 2 seconds
+    // Remove boost after a short burst window
     tapBoostTimerRef.current = setTimeout(() => {
+      setTapSpeedBoost(0);
       setDoubleTapSpeedBoost(0);
-    }, 2000);
-  }, []);
+    }, 1200);
+  }, [countdownText, gameState.gameOver, isPaused]);
 
   const tickSpeed = useMemo(
     () => {
-      const baseSpeed = getTickSpeed(gameState.score, gameState.speedBoostMoves);
+      const selectedPreset = SPEED_PRESETS.find(
+        preset => preset.id === selectedSpeedPresetId,
+      ) ?? SPEED_PRESETS[1];
+      const baseSpeed = Math.max(
+        GAME_CONFIG.MIN_TICK_SPEED,
+        selectedPreset.tickSpeed -
+          Math.floor(gameState.score / SPEED_STEP_SCORE) *
+            GAME_CONFIG.TICK_SPEED_REDUCTION_PER_STEP,
+      );
+      const boostReduction =
+        gameState.speedBoostMoves > 0 ? GAME_CONFIG.SPEED_BOOST_REDUCTION : 0;
       // Apply tap boost, double-tap boost, and hold boost (reduce tick speed = faster game)
       const totalBoost = tapSpeedBoost + doubleTapSpeedBoost + holdSpeedBoostRef.current;
-      return Math.max(GAME_CONFIG.MIN_TICK_SPEED, baseSpeed - totalBoost);
+      return Math.max(GAME_CONFIG.MIN_TICK_SPEED, baseSpeed - boostReduction - totalBoost);
     },
-    [gameState.score, gameState.speedBoostMoves, tapSpeedBoost, doubleTapSpeedBoost],
+    [
+      gameState.score,
+      gameState.speedBoostMoves,
+      selectedSpeedPresetId,
+      tapSpeedBoost,
+      doubleTapSpeedBoost,
+    ],
   );
 
   useEffect(() => {
@@ -220,11 +272,12 @@ export const useSnakeGame = () => {
 
         const currentHead = currentState.snake[0];
         const nextHeadRaw = nextHeadPosition(currentHead, requestedDirection);
-        // Wrap position so snake appears on other side of board
-        const nextHead = {
-          x: ((nextHeadRaw.x % GRID_SIZE) + GRID_SIZE) % GRID_SIZE,
-          y: ((nextHeadRaw.y % GRID_SIZE) + GRID_SIZE) % GRID_SIZE,
-        };
+        const hitWall =
+          nextHeadRaw.x < 0 ||
+          nextHeadRaw.x >= GRID_SIZE ||
+          nextHeadRaw.y < 0 ||
+          nextHeadRaw.y >= GRID_SIZE;
+        const nextHead = nextHeadRaw;
         const snakeBodyForCollision = currentState.snake.slice(0, -1);
         const collision = detectCollision(
           nextHead,
@@ -235,7 +288,7 @@ export const useSnakeGame = () => {
         // Check for obstacle collision
         const hitObstacle = detectObstacleCollision(nextHead, currentState.obstacles);
 
-        if (collision.collided || hitObstacle) {
+        if (hitWall || collision.collided || hitObstacle) {
           if (currentState.shieldCharges > 0) {
             setCollisionToken(value => value + 1);
             triggerHaptic('impact');
@@ -313,17 +366,6 @@ export const useSnakeGame = () => {
             ? GAME_CONFIG.SPEED_BOOST_DURATION
             : Math.max(0, currentState.speedBoostMoves - 1);
         
-        const nextFood = spawnFood(movedSnake, GRID_SIZE, nextScore);
-
-        lastFoodTimestampRef.current = now;
-        currentRedAppleSpawnTimeRef.current = null; // Clear red apple timer since we're spawning new food
-        setFoodPulseToken(value => value + 1);
-        setLastEatenPosition(currentState.food.position);
-        triggerHaptic('success');
-
-        // Track normal apples eaten for red apple spawn gate
-        const normalApplesEatenIncrement = currentState.food.kind === "normal" ? 1 : 0;
-
         // Calculate new tier and spawn obstacles if needed
         const nextTier = getDifficultyTier(nextScore);
         let nextObstacles = currentState.obstacles;
@@ -335,6 +377,17 @@ export const useSnakeGame = () => {
           GRID_SIZE,
           currentState.obstacles,
         );
+
+        const nextFood = spawnFood(movedSnake, GRID_SIZE, nextScore, nextObstacles);
+
+        lastFoodTimestampRef.current = now;
+        currentRedAppleSpawnTimeRef.current = null; // Clear red apple timer since we're spawning new food
+        setFoodPulseToken(value => value + 1);
+        setLastEatenPosition(currentState.food.position);
+        triggerHaptic('success');
+
+        // Track normal apples eaten for red apple spawn gate
+        const normalApplesEatenIncrement = currentState.food.kind === "normal" ? 1 : 0;
 
         return {
           ...currentState,
@@ -421,6 +474,9 @@ export const useSnakeGame = () => {
     submissionStateRef.current = 'idle';
     mountTimeRef.current = Date.now();
     tickCountRef.current = 0;
+    setTapSpeedBoost(0);
+    setDoubleTapSpeedBoost(0);
+    holdSpeedBoostRef.current = 0;
     clearCountdownTimer();
     setGameState(createInitialState());
     pendingDirectionRef.current = null;
@@ -476,7 +532,7 @@ export const useSnakeGame = () => {
     lastRedAppleSpawnTimeRef.current = now;
     
     // Generate a red apple at a random position
-    const newRedApple = spawnFood(gameState.snake, GRID_SIZE, gameState.score);
+    const newRedApple = spawnFood(gameState.snake, GRID_SIZE, gameState.score, gameState.obstacles);
     
     setGameState(prev => ({
       ...prev,
@@ -495,7 +551,7 @@ export const useSnakeGame = () => {
       setGameState(prev => {
         // Only replace if food is still a red apple (hasn't been eaten)
         if (prev.food.kind === "red_apple") {
-          const newFood = spawnFood(prev.snake, GRID_SIZE, prev.score);
+          const newFood = spawnFood(prev.snake, GRID_SIZE, prev.score, prev.obstacles);
           return {
             ...prev,
             food: newFood,
@@ -512,7 +568,15 @@ export const useSnakeGame = () => {
         redAppleTimerRef.current = null;
       }
     };
-  }, [gameState.gameOver, gameState.normalApplesEaten, isPaused, countdownText]);
+  }, [
+    countdownText,
+    gameState.food.kind,
+    gameState.gameOver,
+    gameState.normalApplesEaten,
+    gameState.score,
+    gameState.snake,
+    isPaused,
+  ]);
 
   return {
     gridSize: GRID_SIZE,
@@ -534,7 +598,10 @@ export const useSnakeGame = () => {
     progressToNextSpeed:
       (gameState.score % SPEED_STEP_SCORE) / SPEED_STEP_SCORE,
     tickSpeed,
-    speedMultiplier: parseFloat((400 / tickSpeed).toFixed(2)), // Calculate speed multiplier (base speed 400ms)
+    speedMultiplier: parseFloat((GAME_CONFIG.BASE_TICK_SPEED / tickSpeed).toFixed(2)), // Calculate speed multiplier vs default 400ms pace
+    selectedSpeedPresetId,
+    speedPresets: SPEED_PRESETS,
+    setSelectedSpeedPresetId,
     obstacles: gameState.obstacles,
     currentTier: gameState.currentTier,
     setDirection,

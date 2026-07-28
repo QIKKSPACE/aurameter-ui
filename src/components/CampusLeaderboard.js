@@ -15,7 +15,7 @@ import { useSelector } from "react-redux";
 
 const MEDALS = ["🥇", "🥈", "🥉"];
 
-const CampusLeaderboard = ({ navigation, isProfileCompletion, userId }) => {
+const CampusLeaderboard = ({ navigation, isProfileCompletion, userId,campusId }) => {
   const { theme } = useTheme();
  const { data, loading, error } = useSelector(
     state => state.leaderboard.campus
@@ -34,7 +34,7 @@ const CampusLeaderboard = ({ navigation, isProfileCompletion, userId }) => {
   };
 
   const renderItem = ({ item, index }) => {
-    const rank = index + 1;
+    const rank = item.rank;
 
     return (
       <TouchableOpacity
@@ -58,7 +58,14 @@ const CampusLeaderboard = ({ navigation, isProfileCompletion, userId }) => {
         <View style={styles.rankContainer}>{renderRank(rank)}</View>
 
         {/* Avatar */}
-        <Image source={{ uri: item.avatar }} style={styles.avatar} />
+          <Image  
+        source={
+          item.avatar
+            ? { uri: item.avatar }
+            : require("../assets/newframe.png")
+        }
+        style={styles.avatar}
+      />
 
         {/* Username */}
         <View style={styles.infoContainer}>
@@ -92,7 +99,45 @@ const CampusLeaderboard = ({ navigation, isProfileCompletion, userId }) => {
       </TouchableOpacity>
     );
   };
+if (!campusId) {
+  return (
+    <View
+      style={[
+        styles.emptyContainer,
+        {
+          backgroundColor: theme.components?.card,
+          opacity: theme?.opacity?.light,
+        },
+      ]}
+    >
+      <AppText
+        variant="h4"
+        style={{
+          color: theme.text.primary,
+          textAlign: "center",
+          marginBottom: 10,
+        }}
+      >
+        Please join a campus to view the Campus Leaderboard
+      </AppText>
 
+      <TouchableOpacity
+        style={[
+          styles.joinButton,
+          { backgroundColor: theme.text.accent },
+        ]}
+        onPress={() => navigation.navigate("PickCampusProfile")}
+      >
+        <AppText
+          variant="button"
+          style={{ color: theme.background.color }}
+        >
+          Join Campus
+        </AppText>
+      </TouchableOpacity>
+    </View>
+  );
+}
   return (
     <FlatList
       data={data}
@@ -174,6 +219,20 @@ const styles = StyleSheet.create({
     resizeMode: "contain",
     opacity: 0.85,
   },
+  emptyContainer: {
+  marginTop: 20,
+  borderRadius: 16,
+  padding: 24,
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+joinButton: {
+  paddingHorizontal: 20,
+  paddingVertical: 12,
+  borderRadius: 10,
+  marginTop: 8,
+},
 });
 
 

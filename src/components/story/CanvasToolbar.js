@@ -93,160 +93,18 @@ const handleDownload = async () => {
       >
         <Icon name="arrow-left" size={28} color="#fff" />
       </TouchableOpacity>
-      <Text style={{color:'white',fontSize:16,marginLeft:10}}>Send Story</Text>
+    
         </View>
          
      <TouchableOpacity style={[styles.toolButton,{backgroundColor:"#013647",borderRadius:10,marginVertical:12}]} 
      onPress={()=>{handlePreparePost(sortedLayers,editorWidth,editorHeight)}}>
-   <AppText variant="caption" style={{color:'white'}}>Aura + +</AppText>
+   <AppText variant="caption" style={{color:'white'}}>Send Story</AppText>
 </TouchableOpacity>
        
       </View>
     
 
-      {/* TOOLBAR */}
-      <View style={styles.toolContainer}>
-        <TouchableOpacity style={styles.toolButton} onPress={onPickImage}>
-          <Icon name="image-outline" size={28} color="#fff" />
-        </TouchableOpacity>
-
-        {selectedTrack ? (
-          <TouchableOpacity
-            ref={musicIconRef}
-            style={styles.musicIconWrapper}
-            onPress={()=>{openPreview();
-              togglePlay()}}
-          >
-            <Image
-              source={{ uri: selectedTrack.cover }}
-              style={styles.musicIconImage}
-            />
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.toolButton} onPress={onAddMusic}>
-            <Icon name="music" size={28} color="#fff" />
-          </TouchableOpacity>
-        )}
-
-        <TouchableOpacity style={styles.toolButton} onPress={onAddText}>
-          <Icon name="format-text" size={28} color="#fff" />
-        </TouchableOpacity>
-
-        
- {location?<TouchableOpacity style={styles.toolButton}  onPress={onAddLocation}>
-  <Icon name="earth" size={28} color="white" />
-</TouchableOpacity>: <TouchableOpacity style={styles.toolButton}  onPress={onAddLocation}>
-          <Icon name="map-marker-outline" size={28} color="white" />
-        </TouchableOpacity>}
-       
-
-        
-
-        <TouchableOpacity style={styles.toolButton} onPress={onOpenStickerSheet}>
-          <Icon name="sticker-emoji" size={28} color="white" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.toolButton}  onPress={onAddTag}>
-          <Icon name="account-multiple-outline" size={28} color="white" />
-        </TouchableOpacity>
-       {downlaoding?"":<TouchableOpacity style={styles.toolButton} onPress={()=>{handleDownload()}}>
-<Icon name="download" size={28} color="#fff" />
-</TouchableOpacity>
-}
-
-      <TouchableOpacity style={styles.toolButton} onPress={onBringToFront}>
-            <Icon name="arrow-up-bold-box-outline" size={28} color="#fff" />
-          </TouchableOpacity>
-         {activeLayer && ( 
-          <TouchableOpacity style={styles.toolButton} onPress={onDelete}>
-            <Icon name="delete" size={28} color="#fff" />
-          </TouchableOpacity>
-        )}
-      </View>
-     
-      {/* OVERLAY CLICK TO DISMISS */}
-      {showMusicPreview && (
-        <Pressable
-          style={StyleSheet.absoluteFill}
-          onPress={closePreview}
-        />
-      )}
-
-      {/* MUSIC PREVIEW */}
-      {showMusicPreview && selectedTrack && musicIconLayout && (
-        <Animatable.View
-          animation="fadeInLeft"
-          duration={200}
-          style={[
-            styles.musicPreviewWrapper,
-            {
-              top:
-                musicIconLayout.y +
-                musicIconLayout.height / 2 -
-                ICON_SIZE / 2,
-              right:
-                SCREEN_WIDTH -
-                musicIconLayout.x +
-                10,
-            },
-          ]}
-        >
-          <View style={styles.musicPreview}>
-            <TouchableOpacity  onPress={onAddMusic}>
-<Image
-              source={{ uri: selectedTrack.cover }}
-              style={styles.previewCover}
-             
-            />
-            </TouchableOpacity>
-            
-
-            <View style={styles.musicPreviewInfo}>
-              <Text
-                style={styles.musicPreviewTitle}
-                numberOfLines={1}
-              >
-                {selectedTrack.title}
-              </Text>
-              <Text
-                style={styles.musicPreviewArtist}
-                numberOfLines={1}
-              >
-                {selectedTrack.artist}
-              </Text>
-            </View>
-
-            <TouchableOpacity onPress={togglePlay}>
-              <Icon
-                name={isPlaying ? "pause-circle" : "play-circle"}
-                size={28}
-                color="#fff"
-              />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => {
-                closePreview();
-                onRemoveTrack?.();
-              }}
-            >
-              <Icon name="delete-outline" size={22} color="#fff" />
-            </TouchableOpacity>
-          </View>
-
-         
-        </Animatable.View>
-      )}
-
-        {showMusicPreview && selectedTrack && (
- <Video
-            ref={playerRef}
-            source={{ uri: selectedTrack.streamUrl }}
-            paused={!isPlaying}
-            audioOnly
-            style={{ height: 0, width: 0 }}
-            onEnd={() => setIsPlaying(false)}
-          />
-        )}
+      
     </View>
   );
 }

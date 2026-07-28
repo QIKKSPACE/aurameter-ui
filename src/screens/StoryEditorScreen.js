@@ -5,6 +5,7 @@ import {
   BackHandler,
   Alert,
   NativeModules,
+  Image
 } from "react-native";
 import { shallowEqual, useDispatch, useSelector } from "react-redux";
 
@@ -270,37 +271,59 @@ const addQuizLayer = (quiz) => {
   );
 
   /* ───────────────── ADD IMAGE ───────────────── */
-  const addImageLayer = async (uriFromParam) => {
+const addImageLayer = async (uriFromParam) => {
   let imageUri = uriFromParam;
 
-  // Open picker if not coming from params
   if (!imageUri) {
-    const result = await launchImageLibrary({ mediaType: "photo", quality: 1 });
+    const result = await launchImageLibrary({
+      mediaType: "photo",
+      quality: 1,
+    });
+
     if (!result.assets?.length) return;
+
     imageUri = result.assets[0].uri;
   }
 
+  Image.getSize(
+    imageUri,
+    (imgWidth, imgHeight) => {
+      // Max size inside canvas
+      const maxWidth = DESIGN_WIDTH;
+      const maxHeight = DESIGN_HEIGHT;
 
-  // 🔒 Fixed base size (device-based)
-  const baseWidth = DESIGN_WIDTH * 0.8;
-    const baseHeight = DESIGN_HEIGHT * 0.8;
+      // Preserve aspect ratio
+      const widthRatio = maxWidth / imgWidth;
+      const heightRatio = maxHeight / imgHeight;
 
-    dispatch(
-      addLayer({ 
-        id: uuidv4(),
-        type: "image",
-        x: (DESIGN_WIDTH - baseWidth) / 2,
-        y: (DESIGN_HEIGHT - baseHeight) / 2,
-        scale: 1,
-        rotation: 0,
-        zIndex: story.layers.length,
-        data: {
-          url: imageUri,
-          width: baseWidth,
-          height: baseHeight,
-        },
-      })
-    );
+      const ratio = Math.min(widthRatio, heightRatio);
+
+      const finalWidth = imgWidth * ratio;
+      const finalHeight = imgHeight * ratio;
+
+      dispatch(
+        addLayer({
+          id: uuidv4(),
+          type: "image",
+          x: (DESIGN_WIDTH - finalWidth) / 2,
+          y: (DESIGN_HEIGHT - finalHeight) / 2,
+          scale: 1,
+          rotation: 0,
+          zIndex: story.layers.length,
+          data: {
+            url: imageUri,
+            width: finalWidth,
+            height: finalHeight,
+            originalWidth: imgWidth,
+            originalHeight: imgHeight,
+          },
+        })
+      );
+    },
+    (error) => {
+      console.log("Failed to get image size:", error);
+    }
+  );
 };
 
   /* ───────────────── ADD TEXT ───────────────── */

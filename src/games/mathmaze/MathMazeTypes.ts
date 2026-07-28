@@ -32,6 +32,7 @@ export type MathMazeGameState = {
   pathStatus: PathStatus
   currentResult: number | null
   playerScore: number
+  highScore: number
   timeRemaining: number
   roundsCompleted: number
   isGameOver: boolean

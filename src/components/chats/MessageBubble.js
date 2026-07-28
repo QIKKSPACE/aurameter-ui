@@ -34,7 +34,7 @@ const MessageBubble = ({
       : OTHER_PIC;
 
   const bubbleBackground = isMe
-    ? theme?.gradient || ["#7C3AED", "#4F46E5"]
+    ? theme?.background?.gradient || ["#7C3AED", "#4F46E5"]
     : ["rgba(17,24,39,0.92)", "rgba(30,41,59,0.88)"];
 
   const bubbleTextColor = isMe ? "#FFFFFF" : theme?.text?.primary || "#FFFFFF";
@@ -135,6 +135,12 @@ const MessageBubble = ({
                 onPress={() => onImagePress?.(item.file_url)}
               >
                 <FullWidthImage uri={item.file_url} maxWidth={MAX_MEDIA_WIDTH} />
+                {item?.content?  <AppText
+                style={[styles.textImage, { color: bubbleTextColor }]}
+                variant="body"
+              >
+                {item.content}
+              </AppText>:<></>}
               </Pressable>
             )}
 
@@ -224,8 +230,8 @@ const styles = StyleSheet.create({
   },
   bubble: {
     minWidth: 110,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal:8,
+    paddingVertical: 8,
     borderRadius: 24,
     borderWidth: 1,
     overflow: "hidden",
@@ -240,10 +246,18 @@ const styles = StyleSheet.create({
   text: {
     fontSize: 14,
     lineHeight: 20,
+    marginLeft:10,marginTop:10
+  },
+
+  textImage: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop:5,
+    marginLeft:8
   },
   mediaFrame: {
-    marginTop: 8,
-    borderRadius: 18,
+
+    borderRadius:0,
     overflow: "hidden",
     alignSelf: "flex-start",
     maxWidth: MAX_MEDIA_WIDTH,

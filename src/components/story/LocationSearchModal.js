@@ -36,7 +36,7 @@ export default function LocationSearchModal({
       setIsLoading(true);
       try {
         const res = await fetch(
-          `http://localhost:5001/places/autocomplete?query=${encodeURIComponent(
+          `https://api.aurameter.in/places/autocomplete?query=${encodeURIComponent(
             locationQuery
           )}`
         );

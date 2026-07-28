@@ -9,6 +9,8 @@ type Props = {
   onTryAgain: () => void;
   onKeepGoing?: () => void;
   onNewGame?: () => void;
+  onCollectReward?: () => void;
+  collectingReward?: boolean;
 };
 
 export default function Game2048Overlay({
@@ -16,6 +18,8 @@ export default function Game2048Overlay({
   onTryAgain,
   onKeepGoing,
   onNewGame,
+  onCollectReward,
+  collectingReward = false,
 }: Props) {
   const insets = useSafeAreaInsets();
   const styles = useMemo(
@@ -50,6 +54,13 @@ export default function Game2048Overlay({
           fontWeight: '600',
           textAlign: 'center',
         },
+        rewardText: {
+          color: GAME_2048_COLORS.TITLE_COLOR,
+          fontSize: 16,
+          fontWeight: '700',
+          marginTop: 8,
+          marginBottom: 4,
+        },
       }),
     []
   );
@@ -70,14 +81,24 @@ export default function Game2048Overlay({
             {isWon ? 'YOU WIN!' : 'GAME OVER!'}
           </Text>
 
-          {isWon && onKeepGoing && (
-            <TouchableOpacity
-              style={styles.overlayButton}
-              onPress={onKeepGoing}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.overlayButtonText}>KEEP GOING</Text>
-            </TouchableOpacity>
+         
+
+          {gameState.score > 0 && (
+            <>
+              <Text style={styles.rewardText}>REWARD READY: +{gameState.score} AURA</Text>
+              {onCollectReward && (
+                <TouchableOpacity
+                  style={styles.overlayButton}
+                  onPress={onCollectReward}
+                  disabled={collectingReward}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.overlayButtonText}>
+                    {collectingReward ? 'COLLECTING...' : 'COLLECT AURA'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </>
           )}
 
           {!isWon && (

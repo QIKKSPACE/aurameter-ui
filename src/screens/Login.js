@@ -67,7 +67,7 @@ const deviceId = useSelector(
     setLoading(true);
     try {
       console.log("Logging in with:", { username, password, deviceId });
-      const response = await fetch("http://localhost:5001/auth/login", {
+      const response = await fetch("https://api.aurameter.in/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: username, password, deviceId }),
@@ -218,7 +218,7 @@ const deviceId = useSelector(
   >
     <IconL name="sign-in" size={20} color={theme.text.accent} />
     <AppText variant="caption" style={{ color: theme.text.accent, marginLeft: 8,fontSize:16 }}>
-      Enter Auraverse
+      Signup To Enter Auraverse
     </AppText>
    
   </TouchableOpacity>

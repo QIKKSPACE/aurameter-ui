@@ -13,10 +13,11 @@ import GlobalLeaderboard from "../components/GlobalLeaderboard"; // ✅ import y
 import CampusLeaderboard from "../components/CampusLeaderboard"; // ✅ import your leaderboard
 import FollowingLeaderboard from "../components/FollowingLeaderboard"; // ✅ import your leaderboard
 import { isExpired } from "../utils/isExpired";
-
+import firestore from "@react-native-firebase/firestore";
 import { useNotificationSetup } from "../notifications/useNotificationSetup";
 import { useStoryPolling } from "../polling/useStoryPolling";
 import { fetchLeaderboard } from "../store/leaderboardSlice";
+import { fetchBanners } from "../store/bannerSlice";
 
 const HomeScreen = () => {
   const navigation = useNavigation();
@@ -28,12 +29,21 @@ const HomeScreen = () => {
 
   const userData = useSelector(state => state.user.userData);
   const storiesData = useSelector(state => state.story.stories);
-
+const [homeBanners, setHomeBanners] = useState([]);
+const [loadingBanners, setLoadingBanners] = useState(true);
 
 
   useNotificationSetup(userData?.id);
-const leaderboardState = useSelector(state => state.leaderboard);
 
+
+const leaderboardState = useSelector(state => state.leaderboard);
+useEffect(() => {
+  dispatch(
+    fetchBanners({
+      campusId: userData?.campus_id,
+    })
+  );
+}, [userData?.campus_id]);
 useEffect(() => {
   if (!userData?.id) return;
 
@@ -42,13 +52,20 @@ useEffect(() => {
     dispatch(fetchLeaderboard({ type: "global" }));
   }
 
-  // ---------------- Campus ----------------
+  
+
+  // ---------------- Following ----------------
+  if (isExpired(leaderboardState.following.lastFetchedAt)) {
+dispatch(fetchLeaderboard({ type: "following" }));
+    
+ }
+}, [userData?.id]);
+useEffect(() => {
+  if (!userData?.campus_id) return;
+
   if (
-    userData.campus_id &&
-    (
-      leaderboardState.campus.campusId !== userData.campus_id ||
-      isExpired(leaderboardState.campus.lastFetchedAt)
-    )
+    leaderboardState.campus.campusId !== userData.campus_id ||
+    isExpired(leaderboardState.campus.lastFetchedAt)  
   ) {
     dispatch(
       fetchLeaderboard({
@@ -57,13 +74,7 @@ useEffect(() => {
       })
     );
   }
-
-  // ---------------- Following ----------------
-  //if (isExpired(leaderboardState.following.lastFetchedAt)) {
-    //dispatch(fetchLeaderboard({ type: "following" }));
- // }
-
-}, [userData?.id]);
+}, [userData?.campus_id]);
   const storiesForRender = useMemo(() => {
     if (!storiesData || storiesData.length === 0) {
       return [{
@@ -97,6 +108,7 @@ const renderLeaderboard = () => {
             navigation={navigation}
             isProfileCompletion={userData?.isProfileComplete === false}
              userId={userData?.id}
+              campusId={userData?.campus_id}
           />
         </View>
       );
@@ -107,6 +119,7 @@ const renderLeaderboard = () => {
           <FollowingLeaderboard
             navigation={navigation}
             isProfileCompletion={userData?.isProfileComplete === false}
+             userId={userData?.id}
           />
         </View>
       );

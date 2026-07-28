@@ -61,6 +61,8 @@ import MathMazeScreen from "../screens/MathMazeScreen";
 
 import TetrisTestScreen from "../screens/TetrisTestScreen";
 import UserQuiz from "../screens/UserQuiz";
+import PickCampusProfile from "../screens/PickCampusProfile";
+
 
 
 
@@ -136,6 +138,8 @@ const StackNavigator = () => {
           <Stack.Screen name="MinesweeperGame" component={MinesweeperScreen} />
           <Stack.Screen name="Game2048" component={Game2048Screen} />
           <Stack.Screen name="MathMaze" component={MathMazeScreen} />
+          <Stack.Screen name="PickCampusProfile" component={PickCampusProfile} />
+
 
 
 
@@ -152,7 +156,7 @@ const StackNavigator = () => {
             component={StreakScreen}
             options={{ cardStyleInterpolator: CardStyleInterpolators.forVerticalIOS }}
           />
-          <Stack.Screen name="StoryUploadScreen" component={StoryEditorScreen} />
+        <Stack.Screen name="StoryUploadScreen" component={StoryEditorScreen} />
 
         </>
       ) : (

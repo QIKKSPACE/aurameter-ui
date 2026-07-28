@@ -938,11 +938,25 @@ const levels: ZipLevel[] = [
   },
 ]
 
+const createLevelVariants = (sourceLevels: ZipLevel[], offset: number) =>
+  sourceLevels.map((level) => ({
+    ...level,
+    id: level.id + offset,
+  }))
+
+const extendedLevels = [
+  ...levels,
+  ...createLevelVariants(levels, 30),
+  ...createLevelVariants(levels, 60),
+]
+
+const levelById = new Map(extendedLevels.map((level) => [level.id, level]))
+
 // VALIDATION: Ensure no barriers block solution paths
 function validateAllLevels() {
   const conflicts: string[] = []
   
-  levels.forEach(level => {
+  extendedLevels.forEach(level => {
     level.barriers.forEach((barrier, bi) => {
       for (let i = 0; i < level.solution.length - 1; i++) {
         const a = level.solution[i]
@@ -997,10 +1011,12 @@ function validateAllLevels() {
   }
 }
 
-validateAllLevels()
+if (__DEV__) {
+  validateAllLevels()
+}
 
 export function getLevel(levelId: number): ZipLevel {
-  const level = levels.find((l) => l.id === levelId)
+  const level = levelById.get(levelId)
   if (!level) {
     throw new Error(`Level ${levelId} not found`)
   }
@@ -1008,7 +1024,7 @@ export function getLevel(levelId: number): ZipLevel {
 }
 
 export function totalLevels(): number {
-  return levels.length
+  return extendedLevels.length
 }
 
-export const LEVELS = levels
+export const LEVELS = extendedLevels

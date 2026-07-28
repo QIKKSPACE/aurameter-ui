@@ -30,6 +30,31 @@ import StoryImage from "./components/StoryImage";
 
 const { width: SCR_W, height: SCR_H } = Dimensions.get("window");
 
+const resolveStoryMediaUrl = (story) => {
+  if (!story) return null;
+
+  const rawUrl =
+    story.status !== "ACCEPTED" && story.local_media_url
+      ? story.local_media_url
+      : story.media_url;
+
+  if (!rawUrl || typeof rawUrl !== "string") return null;
+  if (
+    rawUrl.startsWith("file://") ||
+    rawUrl.startsWith("content://") ||
+    rawUrl.startsWith("http://") ||
+    rawUrl.startsWith("https://")
+  ) {
+    return rawUrl;
+  }
+
+  if (rawUrl.startsWith("/") || /^[A-Za-z]:[\\/]/.test(rawUrl)) {
+    return `file://${rawUrl}`;
+  }
+
+  return `${SERVER_URL}${rawUrl}`;
+};
+
 const StoryViewer = () => {
   const navigation = useNavigation();
   const route = useRoute();
@@ -80,11 +105,7 @@ const StoryViewer = () => {
 
   // image url resolution (local vs server)
   const imageUrl = useMemo(() => {
-    if (!currentStory?.media_url) return null;
-    const url = currentStory.media_url;
-    if (typeof url !== "string") return null;
-    if (url.startsWith("file://") || url.startsWith("content://")) return url;
-    return `${SERVER_URL}${url}`;
+    return resolveStoryMediaUrl(currentStory);
   }, [currentStory]);
 
   // Reset music duration on story change

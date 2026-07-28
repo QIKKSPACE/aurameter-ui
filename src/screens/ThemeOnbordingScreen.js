@@ -196,7 +196,7 @@ const ThemeOnboardingScreen = ({ navigation,route }) => {
  const dispatch=useDispatch()
   // Use selected theme for background only (not affecting FlatList)
   const currentTheme = themes[selected] || themes["dark"];
-  console.log(accessToken,"token",refreshToken,campusId)
+
   const [isOnboarding,setIsOnboarding]=useState(false)
   const { showToast } = useToast();
   
@@ -209,7 +209,7 @@ const ThemeOnboardingScreen = ({ navigation,route }) => {
 
   try {
     const res = await axios.post(
-      "http://localhost:5001/auth/complete-onboarding/",
+      "https://api.aurameter.in/auth/complete-onboarding/",
       { themeId: selected, campusId },          // request body
       {
         headers: {

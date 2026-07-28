@@ -40,8 +40,8 @@ const [linkError, setLinkError] = useState("");
     label: "Add Link",
     onPress: () => setMode("link"),
   },
-    { id: "poll", icon: <Icon name="bar-chart" size={24} color="#fff" />, label: "Poll", onPress: () => console.log("Create Poll") },
-    { id: "quiz", icon: <Icon name="help-circle" size={24} color="#fff" />, label: "Quiz", onPress: () => console.log("Add Quiz") },
+   // { id: "poll", icon: <Icon name="bar-chart" size={24} color="#fff" />, label: "Poll", onPress: () => console.log("Create Poll") },
+    //{ id: "quiz", icon: <Icon name="help-circle" size={24} color="#fff" />, label: "Quiz", onPress: () => console.log("Add Quiz") },
   ];
 
   // --- Fetch stickers from KLIPY ---

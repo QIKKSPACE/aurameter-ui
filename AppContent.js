@@ -24,16 +24,21 @@
     import { setAchievements, updateUserData } from './src/store/userSlice'
     import { fetchAuraChats } from './src/store/AuraChatSlice'
     import { fetchMessages, syncMessages } from './src/store/messageThunks'
-    import { syncWordLevel } from './src/store/wordGameSlice'
-    import { setLevel } from './src/store/ballSortSlice'
+    import { selectWordGameCurrentLevel, syncWordLevel } from './src/store/wordGameSlice'
+    import { selectBallSortLevel, setLevel } from './src/store/ballSortSlice'
+import { setLoginLevel } from './src/store/puzzleSlice'
+import { selectZipCurrentLevel, syncZipProgress } from './src/store/zipSlice'
 
-
+ 
     const AppContent = () => {
     const {showToast,toast}=useToast()
     const Drawer = createDrawerNavigator();
     const userdata = useSelector((state) => state.user);
     const dispatch=useDispatch()
     const chats=useSelector(state => state.auraChat)
+  const currentLevel = useSelector(selectWordGameCurrentLevel);
+  const currentLevelZip = useSelector(selectZipCurrentLevel);
+const currentBallSortLevel = useSelector(selectBallSortLevel);
 
     const { theme } = useTheme();
     useDeviceId();
@@ -51,19 +56,40 @@ const fetchUser = async () => {
 
       // Update achievements
       dispatch(setAchievements(res.data.achievements || []));
+      const serverLevel = res.data.user?.word_level || 1;
+      if (currentLevel < serverLevel) {
   dispatch(
         syncWordLevel(
           res.data.user
             ?.word_level || 1
         )
       );
+}
+ 
     
-   dispatch(
-        setLevel(
+ const serverBallSortLevel = (res.data.user?.ball_sort_level || 0) + 1;
+
+if (currentBallSortLevel < serverBallSortLevel) {
+  dispatch(setLevel(serverBallSortLevel));
+}
+       dispatch(
+        setLoginLevel(
           res.data.user
-            ?.ball_sort_level+1 || 1
+            ?.number_game_level+1 || 1
         )
       );
+      const zipLevel=(res.data.user?.zip_level || 0) +1
+      if(currentLevelZip<zipLevel)
+      {
+ dispatch(
+  syncZipProgress({
+    level: (res.data.user?.zip_level || 0) + 1,
+    lastCompletedAt: res.data.user?.zip_last_time,
+  })
+);
+
+      }
+     
     } else {
       console.error("Something went wrong");
     }
@@ -130,13 +156,15 @@ useEffect(() => {
   didBootstrapRef.current = true;
  
   batch.forEach(item => {
-   console.log(item)
+  
    if(item.type=="FETCH")
    {
     dispatch(fetchMessages({chatId:item.chatId}))
    }  
     if(item.type=="SYNC")
    {
+   
+
    dispatch(syncMessages({chatId:item.chatId,afterSeq:item.since,sinceId:item?.sinceId}))
    }
   });

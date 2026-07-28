@@ -208,7 +208,7 @@ showToast("Failed to update profile", "error");
           contentContainerStyle={{ paddingBottom: 40 }}
         >
           {/* progress card */}
-          <View style={[styles.card, { backgroundColor: cardBg, borderColor: borderCol }]}>
+          <View style={[styles.card, { backgroundColor: cardBg }]}>
             <View style={styles.rowBetween}>
               <View>
                 <Text style={[styles.cardTitle, { color: theme.text.primary }]}>Profile Progress</Text>
@@ -280,8 +280,7 @@ showToast("Failed to update profile", "error");
                 placeholderTextColor={theme.text.secondary}
                 value={name}
                 onChangeText={setName}
-                style={[styles.input, { color: theme.text.primary, backgroundColor: inputBg,borderColor:
-                  theme.text.primary }]}
+                style={[styles.input, { color: theme.text.primary, backgroundColor: inputBg }]}
               />
 
               <Text style={[styles.label, { color: theme.text.primary }]}>My Vibe</Text>
@@ -331,6 +330,10 @@ showToast("Failed to update profile", "error");
               </TouchableOpacity>
 
               <Text style={[styles.label, { color: theme.text.primary }]}>Campus Name</Text>
+              <TouchableOpacity onPress={()=>{
+                navigation.navigate("PickCampusProfile")
+              }}>
+
               <TextInput
                 placeholder="Enter Campus name"
                 placeholderTextColor={theme.text.secondary}
@@ -340,6 +343,8 @@ showToast("Failed to update profile", "error");
                 style={[styles.input, { color: theme.text.primary, backgroundColor: inputBg,borderColor:
                   theme.text.primary }]}
               />
+              </TouchableOpacity>
+
 
               <Text style={[styles.label, { color: theme.text.primary }]}>Profile Link</Text>
               <TextInput
@@ -439,7 +444,6 @@ const styles = StyleSheet.create({
     marginTop: 16,
     padding: 14,
     borderRadius: 14,
-    borderWidth: 1,
     shadowColor: "#000",
     shadowOpacity: 0.06,
     shadowRadius: 8,
@@ -519,7 +523,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 14,
     marginBottom: 12,
-    borderWidth: 1,
+    borderWidth: 0,
   },
   inputMultiline: {
     borderRadius: 12,

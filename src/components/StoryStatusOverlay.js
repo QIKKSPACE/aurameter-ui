@@ -24,9 +24,6 @@ const StoryStatusOverlay = ({
   const isAIRejected =
     status === "FAILED" && Boolean(aiRejectResponse);
 
-  const isServerFailed =
-    status === "FAILED" && !aiRejectResponse;
-
   let text = "";
   let loading = false;
   let showRetry = false;
@@ -34,17 +31,17 @@ const StoryStatusOverlay = ({
 
   switch (status) {
     case "LOCAL_QUEUED":
-      text = "Preparing story upload…";
+      text = "Sending story...";
       loading = true;
       break;
 
     case "PENDING":
-      text = "Server recieved the story,preparing uplaod..";
+      text = "Almost there, your story is being uploaded...";
       loading = true;
       break;
 
     case "AI_ACCEPTED":
-      text = "Aura AI approved your story, processing final uplaod...";
+      text = "Aura AI approved your story, processing final upload...";
       break;
      case "AI_FAILED":
       text = "Final processing..";

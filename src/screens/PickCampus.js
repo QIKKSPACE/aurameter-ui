@@ -22,20 +22,48 @@ import AppText from "../components/AppText";
 const PickCampus = ({ navigation, route }) => {
   const { theme } = useTheme();
   const { user, accessToken, refreshToken } = route.params;
-  const [campuses, setCampuses] = useState([{id: 'sIE7w6VTfkNMbp7zUaVU', name: 'AURAMETER CAMPUS'}]);
-  const [filtered, setFiltered] = useState([{id: 'sIE7w6VTfkNMbp7zUaVU', name: 'AURAMETER CAMPUS'}]);
+  const [campuses, setCampuses] = useState([]);
+  const [filtered, setFiltered] = useState([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState(null);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
- Animated.timing(fadeAnim, {
-            toValue: 1,
-            duration: 400,
-            useNativeDriver: true,
-          }).start();
+
   
 
+ useEffect(() => {
+  fetchCampuses();
+
+  Animated.timing(fadeAnim, {
+    toValue: 1,
+    duration: 400,
+    useNativeDriver: true,
+  }).start();
+}, []);
+  const fetchCampuses = async () => {
+    try {
+      setLoading(true);
+
+    
+     const snapshot = await firestore()
+  .collection("colleges")
+  .where("is_approved", "==", true)
+  .get();
+
+      const data = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      setCampuses(data);
+      setFiltered(data);
+    } catch (err) {
+      console.log("Error fetching colleges:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
   useEffect(() => {
     if (!search.trim()) return setFiltered(campuses);
     const lower = search.toLowerCase();
@@ -48,7 +76,7 @@ const PickCampus = ({ navigation, route }) => {
     );
   }, [search, campuses]);
 
-  const handleNext = () => {
+  const handleNext = () => {  
     navigation.navigate("ThemeOnboarding", {
       user,
       accessToken,

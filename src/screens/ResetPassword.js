@@ -1,8 +1,7 @@
 // screens/ResetPassword.js
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import {
   View,
-  Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
@@ -10,9 +9,8 @@ import {
   ScrollView,
   Platform,
   ActivityIndicator,
-  Animated,
+  Keyboard,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import Icon from "react-native-vector-icons/Feather";
 import { useTheme } from "../constants/context/ThemeContext";
 import ScreenBackground from "../components/ScreenBackground";
@@ -21,25 +19,38 @@ import AppText from "../components/AppText";
 
 const ResetPassword = ({ navigation, route }) => {
   const { theme } = useTheme();
-  const { email,codeStr } = route.params; // from ForgotPasswordCode
+  const { email, codeStr } = route.params; // from ForgotPasswordCode
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
 
-  // Animated toast
-  const slideAnim = useRef(new Animated.Value(-80)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const { showToast } = useToast();
 
-  const {showToast} =useToast()
   const handleResetPassword = async () => {
+    Keyboard.dismiss();
+
+    // 1. Check for empty fields
     if (!password || !confirmPassword) {
       showToast("Both fields are required", "error");
       return;
     }
+
+    // 2. Reject Emojis
+    const emojiRegex = /\p{Extended_Pictographic}/u;
+    if (emojiRegex.test(password)) {
+      showToast("Emojis are not allowed in the password", "error");
+      return;
+    }
+
+    // 3. Enforce minimum character length
+    if (password.length < 6) {
+      showToast("Password must be at least 6 characters long", "error");
+      return;
+    }
+
+    // 4. Verify password matching
     if (password !== confirmPassword) {
       showToast("Passwords do not match", "error");
       return;
@@ -47,10 +58,10 @@ const ResetPassword = ({ navigation, route }) => {
 
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:5001/auth/reset-password", {
+      const response = await fetch("https://api.aurameter.in/auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password,code:codeStr }),
+        body: JSON.stringify({ email, password, code: codeStr }),
       });
       const data = await response.json();
 
@@ -70,8 +81,7 @@ const ResetPassword = ({ navigation, route }) => {
 
   return (
     <ScreenBackground>
-      <View style={styles.safeArea} edges={["top", "bottom"]}>
-       
+      <View style={styles.safeArea}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -81,17 +91,25 @@ const ResetPassword = ({ navigation, route }) => {
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.container}>
-              <AppText variant="h3"
-              style={[styles.title, { color: theme.text.primary }]}>
+              <AppText
+                variant="h3"
+                style={[styles.title, { color: theme.text.primary }]}
+              >
                 Create New Password
               </AppText>
-              <AppText variant="body" style={[styles.subtitle, { color: theme.text.secondary }]}>
+              <AppText
+                variant="body"
+                style={[styles.subtitle, { color: theme.text.secondary }]}
+              >
                 Enter your new password and confirm it 🔒
               </AppText>
 
               {/* New Password */}
               <View
-                style={[styles.inputContainer, { borderColor: theme.components.border, backgroundColor: theme.components.card }]}
+                style={[
+                  styles.inputContainer,
+                  { borderColor: theme.components.border, backgroundColor: theme.components.card },
+                ]}
               >
                 <TextInput
                   style={[styles.input, { color: theme.text.primary }]}
@@ -112,7 +130,10 @@ const ResetPassword = ({ navigation, route }) => {
 
               {/* Confirm Password */}
               <View
-                style={[styles.inputContainer, { borderColor: theme.components.border, backgroundColor: theme.components.card }]}
+                style={[
+                  styles.inputContainer,
+                  { borderColor: theme.components.border, backgroundColor: theme.components.card },
+                ]}
               >
                 <TextInput
                   style={[styles.input, { color: theme.text.primary }]}
@@ -139,7 +160,10 @@ const ResetPassword = ({ navigation, route }) => {
                 {loading ? (
                   <ActivityIndicator size="small" color={theme.background.color} />
                 ) : (
-                  <AppText variant="button" style={[styles.buttonText, { color: theme.background.color }]}>
+                  <AppText
+                    variant="button"
+                    style={[styles.buttonText, { color: theme.background.color }]}
+                  >
                     Reset Password
                   </AppText>
                 )}
@@ -176,6 +200,5 @@ const styles = StyleSheet.create({
     marginTop: 10,
     elevation: 4,
   },
-  buttonText: { fontSize: 16, },
-  
+  buttonText: { fontSize: 16 },
 });

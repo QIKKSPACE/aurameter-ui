@@ -18,7 +18,7 @@ class MainActivity : ReactActivity() {
     private var splashContainer: FrameLayout? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+        super.onCreate(null)
          HealthConnectPermissionDelegate.setPermissionDelegate(this)
         // Edge-to-edge UI
         WindowCompat.setDecorFitsSystemWindows(window, true)

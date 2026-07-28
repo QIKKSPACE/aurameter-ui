@@ -220,7 +220,7 @@ function createValidEquation(settings) {
     settings.allowedOperators[
       rand(0, settings.allowedOperators.length - 1)
     ];
-  const termCount = settings.maxTerms >= 3 && Math.random() < 0.28 ? 3 : 2;
+  const termCount = pickTermCount(settings.maxTerms);
   const [minNumber, maxNumber] = settings.numberRange;
 
   if (op === "+") {
@@ -229,9 +229,11 @@ function createValidEquation(settings) {
   }
 
   if (op === "-") {
-    const values = Array.from({ length: termCount }, () => rand(minNumber, maxNumber))
-      .sort((a, b) => b - a);
-    return { values, result: values.reduce((a, b) => a - b), operator: "-" };
+    return createNonNegativeSubtractionEquation({
+      termCount,
+      minNumber,
+      maxNumber,
+    });
   }
 
   if (op === "*") {
@@ -244,6 +246,47 @@ function createValidEquation(settings) {
   const divisor = rand(minDiv, maxDiv);
   const result = rand(minDiv, maxDiv);
   return { values: [divisor * result, divisor], result, operator: "/" };
+}
+
+function createNonNegativeSubtractionEquation({ termCount, minNumber, maxNumber }) {
+  const values = [];
+  const tailCount = Math.max(1, termCount - 1);
+
+  const maxResult = Math.max(0, maxNumber - minNumber * tailCount);
+  const result = rand(0, Math.max(0, maxResult));
+  let remainingBudget = maxNumber - result;
+
+  for (let i = 0; i < tailCount - 1; i++) {
+    const remainingTailSlots = tailCount - i - 1;
+    const minNeededForRest = minNumber * remainingTailSlots;
+    const maxForThis = remainingBudget - minNeededForRest;
+    const value = rand(minNumber, Math.max(minNumber, maxForThis));
+    values.push(value);
+    remainingBudget -= value;
+  }
+
+  values.push(rand(minNumber, Math.max(minNumber, remainingBudget)));
+
+  const firstValue = values.reduce((sum, value) => sum + value, result);
+
+  return {
+    values: [firstValue, ...values],
+    result,
+    operator: "-",
+  };
+}
+
+function pickTermCount(maxTerms) {
+  if (maxTerms <= 2) return 2;
+
+  if (maxTerms === 3) {
+    return Math.random() < 0.45 ? 3 : 2;
+  }
+
+  const roll = Math.random();
+  if (roll < 0.2) return 2;
+  if (roll < 0.58) return 3;
+  return 4;
 }
 
 function rand(min, max) {
@@ -267,6 +310,11 @@ function applyVisibilityRules(cells, settings) {
     const hideOne = editableCells[rand(0, editableCells.length - 1)];
     hideOne.value = null;
   }
+
+  // Any revealed number becomes a locked clue; only blank cells remain editable.
+  editableCells.forEach((cell) => {
+    cell.editable = cell.value === null;
+  });
 
   // result cells always visible
   Object.values(cells).forEach(cell => {

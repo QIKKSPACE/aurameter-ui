@@ -83,21 +83,18 @@ export function moveTiles(
     grid[tile.row][tile.col] = tile;
   });
 
-  let scoreDelta = 0;
   let moved = false;
 
   if (direction === 'left') {
     for (let row = 0; row < 4; row++) {
       const result = slideAndMerge(grid[row], 'left');
       grid[row] = result.line;
-      scoreDelta += result.score;
       if (result.changed) moved = true;
     }
   } else if (direction === 'right') {
     for (let row = 0; row < 4; row++) {
       const result = slideAndMerge(grid[row], 'right');
       grid[row] = result.line;
-      scoreDelta += result.score;
       if (result.changed) moved = true;
     }
   } else if (direction === 'up') {
@@ -107,7 +104,6 @@ export function moveTiles(
       for (let row = 0; row < 4; row++) {
         grid[row][col] = result.line[row];
       }
-      scoreDelta += result.score;
       if (result.changed) moved = true;
     }
   } else if (direction === 'down') {
@@ -117,7 +113,6 @@ export function moveTiles(
       for (let row = 0; row < 4; row++) {
         grid[row][col] = result.line[row];
       }
-      scoreDelta += result.score;
       if (result.changed) moved = true;
     }
   }
@@ -144,7 +139,6 @@ export function moveTiles(
 
   return {
     tiles: newTiles,
-    scoreDelta,
     moved,
   };
 }
@@ -152,7 +146,7 @@ export function moveTiles(
 function slideAndMerge(
   line: Array<Tile | null>,
   direction: 'left' | 'right'
-): { line: Array<Tile | null>; score: number; changed: boolean } {
+): { line: Array<Tile | null>; changed: boolean } {
   const originalLine = [...line];
 
   let newLine: Array<Tile | null> = line.filter((tile) => tile !== null);
@@ -165,7 +159,6 @@ function slideAndMerge(
     }
   }
 
-  let score = 0;
   let hasChanged = false;
 
   if (direction === 'left') {
@@ -183,7 +176,6 @@ function slideAndMerge(
           value: mergedValue,
           isMerged: true,
         };
-        score += mergedValue;
         newLine.splice(i + 1, 1);
         newLine.push(null);
       }
@@ -203,7 +195,6 @@ function slideAndMerge(
           value: mergedValue,
           isMerged: true,
         };
-        score += mergedValue;
         newLine.splice(i - 1, 1);
         newLine.unshift(null);
         i++;
@@ -215,7 +206,7 @@ function slideAndMerge(
     hasChanged = true;
   }
 
-  return { line: newLine, score, changed: hasChanged };
+  return { line: newLine, changed: hasChanged };
 }
 
 export function checkGameOver(tiles: Tile[]): boolean {

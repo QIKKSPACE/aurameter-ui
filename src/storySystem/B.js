@@ -32,7 +32,7 @@ import AppText from "../components/AppText";
 import { Blurhash } from "react-native-blurhash";
 const { width, height } = Dimensions.get("window");
 const STORY_DURATION = 15000; // 15 seconds
-const SERVER_URL = "http://localhost:5001"; // replace with your PC IP for device
+const SERVER_URL = "https://api.aurameter.in"; // replace with your PC IP for device
 
 const FALLBACK_MUSIC = {
 id: 1632274446,

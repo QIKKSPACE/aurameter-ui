@@ -250,11 +250,12 @@ const { selfRank } = useSelector(
                
                 <TouchableOpacity
                   style={[styles.vibeBtn, { borderColor: theme.text.accent }]}
+                  onPress={()=>{
+                    navigation.navigate("Connections")
+                  }}
                 >
 
-                  <AppText style={[ { color: theme.text.accent,fontSize:12 }]} variant="h4" onPress={()=>{
-                    navigation.navigate("Connections")
-                  }}>
+                  <AppText style={[ { color: theme.text.accent,fontSize:12 }]} variant="h4" >
                     Connections
                   </AppText>
                 </TouchableOpacity>
@@ -354,8 +355,54 @@ const { selfRank } = useSelector(
   </TouchableOpacity>
 </View>
 <View style={{paddingHorizontal:4}}>
-<PlaylistGrid playlist={user?.userData?.playlist} 
- onStopPlayback={(fn) => (stopPlayerRef.current = fn)} />
+<View style={{ paddingHorizontal: 4 }}>
+  {user?.userData?.playlist?.length > 0 ? (
+    <PlaylistGrid
+      playlist={user?.userData?.playlist}
+      onStopPlayback={(fn) => (stopPlayerRef.current = fn)}
+    />
+  ) : (
+    <View
+      style={[
+        styles.emptyState,
+        {
+          backgroundColor: theme.components.box,
+          opacity:
+            theme.background.style !== "image"
+              ? theme.opacity.light
+              : 1,
+        },
+      ]}
+    >
+      <Ionicons
+        name="musical-notes-outline"
+        size={40}
+        color={theme.text.secondary}
+      />
+      <AppText
+        variant="h4"
+        style={{
+          color: theme.text.primary,
+          marginTop: 10,
+          textAlign: "center",
+        }}
+      >
+        Create Your Playlist
+      </AppText>
+
+      <AppText
+        variant="body"
+        style={{
+          color: theme.text.secondary,
+          marginTop: 4,
+          textAlign: "center",
+        }}
+      >
+        No songs added yet
+      </AppText>
+    </View>
+  )}
+</View>
 
 </View>
 {/* Achievements Header */}
@@ -398,6 +445,48 @@ const { selfRank } = useSelector(
           keyExtractor={(item) => item.id}
           renderItem={renderAchievement}
           contentContainerStyle={styles.scrollContent}
+          ListEmptyComponent={
+  <View
+    style={[
+      styles.emptyState,
+      {
+        backgroundColor: theme.components.box,
+        opacity:
+          theme.background.style !== "image"
+            ? theme.opacity.light
+            : 1,
+      },
+    ]}
+  >
+    <Ionicons
+      name="trophy-outline"
+      size={40}
+      color={theme.text.secondary}
+    />
+
+    <AppText
+      variant="h4"
+      style={{
+        color: theme.text.primary,
+        marginTop: 10,
+        textAlign: "center",
+      }}
+    >
+      No Achievements Yet
+    </AppText>
+
+    <AppText
+      variant="body"
+      style={{
+        color: theme.text.secondary,
+        marginTop: 4,
+        textAlign: "center",
+      }}
+    >
+      Earn Aura to unlock achievements
+    </AppText>
+  </View>
+}
         />
       </View>
     </ScreenBackground>
@@ -596,6 +685,14 @@ bottomMeta: {
   flexDirection: "row",
   alignItems: "center",
   marginTop: 10,
+},
+emptyState: {
+  paddingVertical: 30,
+  paddingHorizontal: 20,
+  borderRadius: 16,
+  alignItems: "center",
+  justifyContent: "center",
+  marginBottom: 20,
 },
 });
 

@@ -60,7 +60,7 @@ const ForgotPasswordCode = ({ navigation, route }) => {
 
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:5001/auth/verify-password-reset", {
+      const response = await fetch("https://api.aurameter.in/auth/verify-password-reset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, code: codeStr }),

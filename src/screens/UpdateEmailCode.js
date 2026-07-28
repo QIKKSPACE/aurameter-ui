@@ -144,46 +144,65 @@ navigation.reset({
               {/* Code Inputs */}
               <View style={styles.codeContainer}>
                {code.map((digit, index) => (
-  <TextInput
-    key={index}
-    ref={(el) => (inputs.current[index] = el)}
-    style={[
-      styles.codeInput,
-      {
-        borderColor: theme.components.border,
-        backgroundColor: theme.components.card,
-        color: theme.text.primary,
-      },
-    ]}
-    keyboardType="number-pad"
-    maxLength={1}
-    value={digit}
-    onChangeText={(text) => {
-      const newCode = [...code];
-      newCode[index] = text.slice(-1); // ensure only 1 char
-      setCode(newCode);
-
-      if (text && index < code.length - 1) {
-        inputs.current[index + 1].focus();
-      }
-    }}
-    onKeyPress={({ nativeEvent }) => {
-      if (nativeEvent.key === "Backspace") {
-        const newCode = [...code];
-
-        if (digit) {
-          // Clear current box
-          newCode[index] = "";
-          setCode(newCode);
-        } else if (index > 0) {
-          // Move to previous box and clear it
-          newCode[index - 1] = "";
-          setCode(newCode);
-          inputs.current[index - 1].focus();
-        }
-      }
-    }}
-  />
+ <TextInput
+   key={index}
+   ref={(el) => (inputs.current[index] = el)}
+   style={[
+     styles.codeInput,
+     {
+       borderColor: theme.components.border,
+       backgroundColor: theme.components.card,
+       color: theme.text.primary,
+     },
+   ]}
+   keyboardType="number-pad"
+   maxLength={6}
+   value={digit}
+   textContentType="oneTimeCode"
+   autoComplete="sms-otp"
+   importantForAutofill="yes"
+   onChangeText={(text) => {
+     // Handle OTP paste
+     if (text.length > 1) {
+       const pastedDigits = text.replace(/\D/g, "").slice(0, 6).split("");
+ 
+       const newCode = ["", "", "", "", "", ""];
+ 
+       pastedDigits.forEach((digit, i) => {
+         newCode[i] = digit;
+       });
+ 
+       setCode(newCode);
+ 
+       const lastIndex = Math.min(pastedDigits.length - 1, 5);
+       inputs.current[lastIndex]?.focus();
+ 
+       return;
+     }
+ 
+     const newCode = [...code];
+     newCode[index] = text;
+     setCode(newCode);
+ 
+     if (text && index < 5) {
+       inputs.current[index + 1]?.focus();
+     }
+   }}
+   onKeyPress={({ nativeEvent }) => {
+     if (nativeEvent.key === "Backspace") {
+       const newCode = [...code];
+ 
+       if (digit) {
+         newCode[index] = "";
+         setCode(newCode);
+       } else if (index > 0) {
+         newCode[index - 1] = "";
+         setCode(newCode);
+         inputs.current[index - 1]?.focus();
+       }
+     }
+   }}
+ />
 ))}
 
               </View>

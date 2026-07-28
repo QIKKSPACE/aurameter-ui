@@ -34,33 +34,35 @@ const calculateDropInterval = (level) =>
     INITIAL_DROP_INTERVAL - (level - 1) * LEVEL_SPEED_STEP
   );
 
+const createRunState = () => ({
+  status: "idle",
+  score: 0,
+  level: 1,
+  linesCleared: 0,
+  dropInterval: INITIAL_DROP_INTERVAL,
+  board: createEmptyBoard(),
+  currentPiece: null,
+  nextPiece: null,
+  startedAt: null,
+  pausedAt: null,
+});
+
+const normalizeTetrisState = (state) => {
+  if (!state.board) state.board = createEmptyBoard();
+  if (typeof state.score !== "number") state.score = 0;
+  if (typeof state.level !== "number" || state.level < 1) state.level = 1;
+  if (typeof state.linesCleared !== "number") state.linesCleared = 0;
+  if (typeof state.dropInterval !== "number") state.dropInterval = INITIAL_DROP_INTERVAL;
+  if (typeof state.auraEarned !== "number") state.auraEarned = 0;
+  if (!state.status) state.status = "idle";
+};
+
 /**
  * Initial State
  */
 const initialState = {
-  // Lifecycle
-  status: "idle", // idle | playing | paused | gameover
-
-  // Progress
-  score: 0,
-  level: 1,
-  linesCleared: 0,
-
-  // Speed
-  dropInterval: INITIAL_DROP_INTERVAL,
-
-  // Aura
+  ...createRunState(),
   auraEarned: 0,
-  lastAuraCheckpoint: 0,
-
-  // Persistence
-  board: createEmptyBoard(),
-  currentPiece: null,
-  nextPiece: null,
-
-  // Meta
-  startedAt: null,
-  pausedAt: null,
 };
 
 const tetrisGameSlice = createSlice({
@@ -71,14 +73,20 @@ const tetrisGameSlice = createSlice({
      * Game lifecycle
      */
     initGame(state) {
-      Object.assign(state, initialState);
+      const auraEarned = state.auraEarned ?? 0;
+
+      Object.assign(state, createRunState(), {
+        auraEarned,
+      });
     },
 
     startGame(state) {
-      Object.assign(state, {
-        ...initialState,
+      const auraEarned = state.auraEarned ?? 0;
+
+      Object.assign(state, createRunState(), {
         status: "playing",
         startedAt: Date.now(),
+        auraEarned,
       });
     },
 
@@ -102,14 +110,17 @@ const tetrisGameSlice = createSlice({
      * Engine sync
      */
     setBoard(state, action) {
+      normalizeTetrisState(state);
       state.board = action.payload;
     },
 
     setCurrentPiece(state, action) {
+      normalizeTetrisState(state);
       state.currentPiece = action.payload;
     },
 
     setNextPiece(state, action) {
+      normalizeTetrisState(state);
       state.nextPiece = action.payload;
     },
 
@@ -117,25 +128,26 @@ const tetrisGameSlice = createSlice({
      * Scoring & progression
      */
     clearLines(state, action) {
+      normalizeTetrisState(state);
       const lines = action.payload; // 1..4
       if (!SCORE_TABLE[lines]) return;
 
-      state.score += SCORE_TABLE[lines];
+      const points = SCORE_TABLE[lines];
+      state.score += points;
+      state.auraEarned += points;
       state.linesCleared += lines;
 
       // Level update
       state.level = calculateLevel(state.linesCleared);
       state.dropInterval = calculateDropInterval(state.level);
-
-      // Aura rewards (checkpoint based)
-      while (state.score - state.lastAuraCheckpoint >= 25) {
-        state.auraEarned += 1;
-        state.lastAuraCheckpoint += 25;
-      }
     },
-       resetScore(state) {
+    claimAuraReward(state) {
+      normalizeTetrisState(state);
+      state.auraEarned = 0;
+    },
+    resetScore(state) {
+      normalizeTetrisState(state);
       state.score = 0;
-     
     },
 
   },
@@ -151,7 +163,8 @@ export const {
   setCurrentPiece,
   setNextPiece,
   clearLines,
-  resetScore
+  claimAuraReward,
+  resetScore,
 } = tetrisGameSlice.actions;
 
 export default tetrisGameSlice.reducer;

@@ -12,6 +12,8 @@ import {
   Modal,
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
+import FIcon from "react-native-vector-icons/FontAwesome5";
+
 import LottieView from "lottie-react-native";
 import LinearGradient from "react-native-linear-gradient";
 import Video from "react-native-video";
@@ -29,6 +31,10 @@ import { useTheme } from "../constants/context/ThemeContext";
 import LottieParticles from "../assets/particles.json";
 
 import { useNavigation } from "@react-navigation/native";
+import api from "../services/api";
+import { updateUserData } from "../store/userSlice";
+import { useDispatch, useSelector } from "react-redux";
+import { useToast } from "../constants/context/ErrorContext";
 
 /* ------------------ CONSTANTS ------------------ */
 const MUSIC_CACHE_KEY = "breathing_music_cache";
@@ -57,7 +63,9 @@ const BreathingScreen = () => {
 
   const [infoVisible, setInfoVisible] = useState(false);
   const [musicModal, setMusicModal] = useState(false);
-
+const { showToast } = useToast();
+const dispatch = useDispatch();
+const user=useSelector(state=>state.user?.userData)
   // NEW
   const [auraVisible, setAuraVisible] = useState(false);
 
@@ -197,6 +205,41 @@ const BreathingScreen = () => {
   const remaining = SESSION_DURATION - elapsed;
   const mins = Math.floor(remaining / 60);
   const secs = remaining % 60;
+  const claimAura = async() => {
+    try {
+    const response = await api.post(
+      '/game/breathing',
+      {
+        aura: 10,
+      },
+    );
+
+    if (response?.data?.success) {
+      
+      dispatch(
+    updateUserData({
+      aura:
+        (user?.aura || 0) + 10,
+      last_breathing_time: new Date()
+    })
+  );
+showToast( `You claimed ${10} points.`, "success");
+    }
+     setAuraVisible(false);
+          setElapsed(0);
+          setPhase("Inhale");
+  } catch (err) {
+     setAuraVisible(false);
+          setElapsed(0);
+          setPhase("Inhale");
+    console.log(
+      'Claim reward error:',
+      err?.response?.data || err.message,
+    );
+showToast("Failed to Claim  Aura, Try again", "error");
+  }
+   
+  }
 
   /* ------------------ UI ------------------ */
   return (
@@ -266,15 +309,7 @@ const BreathingScreen = () => {
         </View>
       )}
 
-      {!musicLocked && (
-        <TouchableOpacity
-          style={styles.musicBtn}
-          onPress={() => setMusicModal(true)}
-        >
-          <Icon name="music" size={18} color="#0D1B2A" />
-          <Text style={styles.musicText}>Choose Music</Text>
-        </TouchableOpacity>
-      )}
+     
 
       <TouchableOpacity
         style={styles.actionBtn}
@@ -295,11 +330,11 @@ const BreathingScreen = () => {
           ref={videoRef}
           source={{ uri: audioUrl }}
           paused={!isPlaying}
-          audioOnly
+          audioOnly 
           repeat
         />
       )}
-
+     
       {/* INFO MODAL */}
       <Modal visible={infoVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
@@ -381,10 +416,17 @@ const BreathingScreen = () => {
     {/* SIMPLE SUCCESS MODAL */}
 <Modal visible={auraVisible} transparent animationType="fade">
   <View style={styles.modalOverlay}>
+   
     <LinearGradient
       colors={["#111827", "#1F2937"]}
       style={styles.successCard}
     >
+       <TouchableOpacity
+            style={styles.claimCloseButton}
+            onPress={() => setAuraVisible(false)}
+          >
+            <FIcon name="times" size={18} color="#8E8E9A" />
+          </TouchableOpacity>
       <View style={styles.successGlow} />
 
       <Text style={styles.successEmoji}>✨</Text>
@@ -404,9 +446,7 @@ const BreathingScreen = () => {
       <TouchableOpacity
         style={styles.claimBtn}
         onPress={() => {
-          setAuraVisible(false);
-          setElapsed(0);
-          setPhase("Inhale");
+          claimAura()
         }}
       >
         <LinearGradient
@@ -654,5 +694,17 @@ claimText: {
   fontSize: 17,
   fontWeight: "800",
   letterSpacing: 0.5,
+},
+claimCloseButton: {
+  position: 'absolute',
+  top: 14,
+  right: 14,
+  width: 34,
+  height: 34,
+  borderRadius: 17,
+  backgroundColor: 'rgba(255,255,255,0.06)',
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 10,
 },
 });   

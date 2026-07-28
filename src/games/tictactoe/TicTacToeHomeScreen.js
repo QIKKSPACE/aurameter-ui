@@ -12,7 +12,10 @@ import {
     StyleSheet,
     StatusBar,
     Dimensions,
+    ActivityIndicator,
 } from 'react-native';
+import { useSelector } from 'react-redux';
+import { useToast } from '../../constants/context/ErrorContext';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -39,6 +42,7 @@ const TicTacToeHomeScreen = ({ navigation }) => {
     } = useTicTacToeContext();
 
     const themeSelectorRef = useRef(null);
+    const { showToast } = useToast();
 
     // ─── Animated title ───
     const titleScale = useSharedValue(1);
@@ -109,28 +113,14 @@ const TicTacToeHomeScreen = ({ navigation }) => {
                     </View>
                 </Animated.View>
 
+
                 {/* XP Bar */}
                 <Animated.View entering={FadeInDown.delay(500).springify()}>
                     <XPBar xp={xp} progress={xpProgress} theme={theme} />
                 </Animated.View>
 
                 {/* Achievements Row */}
-                {unlockedAchievements.length > 0 && (
-                    <Animated.View
-                        style={[styles.achievementsRow, { backgroundColor: theme.cardBg }]}
-                        entering={FadeInDown.delay(600).springify()}
-                    >
-                        <Text style={[styles.achievementsLabel, { color: theme.textSecondary }]}>
-                            Achievements
-                        </Text>
-                        <View style={styles.achievementIcons}>
-                            {unlockedAchievements.map((a) => (
-                                <Text key={a.id} style={styles.achievementIcon}>{a.icon}</Text>
-                            ))}
-                        </View>
-                    </Animated.View>
-                )}
-
+               
                 {/* Buttons */}
                 <Animated.View style={styles.buttonGroup} entering={FadeInUp.delay(700).springify()}>
                     <TouchableOpacity

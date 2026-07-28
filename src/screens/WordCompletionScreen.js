@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,12 +8,10 @@ import {
   ActivityIndicator,
   ScrollView,
   Animated,
-  Modal,
   Dimensions,
   StatusBar,
   KeyboardAvoidingView,
   Platform,
-  Alert
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -35,10 +33,36 @@ const { width } = Dimensions.get('window');
 
 const wordData = require('../assets/word.json');
 
+const getResponsiveConfigForLength = (length) => {
+  const availableWidth = width - 90;
+
+  let cellSize = 62;
+  let gap = 12;
+
+  const estimated = length * cellSize + (length - 1) * gap;
+
+  if (estimated > availableWidth) {
+    cellSize = Math.max(
+      34,
+      Math.floor((availableWidth - length * 6) / length),
+    );
+    gap = 6;
+  }
+
+  const fontSize = Math.max(18, cellSize * 0.42);
+
+  return {
+    cellSize,
+    gap,
+    fontSize,
+  };
+};
+
 const WordCompletionScreen = () => {
   const navigation = useNavigation();
   const dispatch = useDispatch();
 const { showToast } = useToast();
+const user=useSelector(state=>state.user)
 
   const currentLevel = useSelector(selectWordGameCurrentLevel);
   const maxLevel = useSelector(selectWordGameMaxLevel);
@@ -54,17 +78,33 @@ const { showToast } = useToast();
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
-const user=useSelector(state=>state.user)
   const inputRefs = useRef([]);
+  const glowLoopRef = useRef(null);
+  const backspaceHandledRef = useRef(false);
+  const [activeIndex, setActiveIndex] = useState(null);
 
   useEffect(() => {
     loadLevel(currentLevel);
-  }, [currentLevel]);
+  }, [currentLevel, loadLevel]);
 
-  const loadLevel = (level) => {
+  useEffect(() => {
+    return () => {
+      if (glowLoopRef.current) {
+        glowLoopRef.current.stop();
+      }
+    };
+  }, []);
+
+  const loadLevel = useCallback((level) => {
     setLoading(true);
     setFeedback('');
     setWordInfo(null);
+    setActiveIndex(null);
+    backspaceHandledRef.current = false;
+
+    if (glowLoopRef.current) {
+      glowLoopRef.current.stop();
+    }
 
     const data = wordData.find(item => item.Level === level);
 
@@ -81,6 +121,14 @@ const user=useSelector(state=>state.user)
 
     setUserInput(initialInput);
 
+    const firstEditableIndex = data.Hint.indexOf('_');
+    setTimeout(() => {
+      if (firstEditableIndex !== -1) {
+        setActiveIndex(firstEditableIndex);
+        inputRefs.current[firstEditableIndex]?.focus();
+      }
+    }, 0);
+
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -94,7 +142,7 @@ const user=useSelector(state=>state.user)
       }),
     ]).start();
 
-    Animated.loop(
+    glowLoopRef.current = Animated.loop(
       Animated.sequence([
         Animated.timing(glowAnim, {
           toValue: 1,
@@ -107,29 +155,77 @@ const user=useSelector(state=>state.user)
           useNativeDriver: false,
         }),
       ]),
-    ).start();
+    );
+
+    glowLoopRef.current.start();
 
     setLoading(false);
+  }, [fadeAnim, glowAnim, scaleAnim]);
+
+  const getNextEditableIndex = (fromIndex) => {
+    for (let i = fromIndex + 1; i < levelData.Hint.length; i += 1) {
+      if (levelData.Hint[i] === '_') {
+        return i;
+      }
+    }
+
+    return -1;
+  };
+
+  const getPreviousEditableIndex = (fromIndex) => {
+    for (let i = fromIndex - 1; i >= 0; i -= 1) {
+      if (levelData.Hint[i] === '_') {
+        return i;
+      }
+    }
+
+    return -1;
   };
 
   const handleInput = (value, index) => {
+    if (!value && backspaceHandledRef.current) {
+      backspaceHandledRef.current = false;
+      return;
+    }
+
     const newInput = [...userInput];
     newInput[index] = value.toLowerCase();
     setUserInput(newInput);
 
-    if (value && index < levelData.Hint.length - 1) {
-      let nextIndex = -1;
+    if (!value) {
+      setActiveIndex(index);
+      return;
+    }
 
-      for (let i = index + 1; i < levelData.Hint.length; i++) {
-        if (levelData.Hint[i] === '_') {
-          nextIndex = i;
-          break;
-        }
-      }
+    const nextIndex = getNextEditableIndex(index);
 
-      if (nextIndex !== -1) {
-        inputRefs.current[nextIndex]?.focus();
-      }
+    if (nextIndex !== -1) {
+      inputRefs.current[nextIndex]?.focus();
+    }
+  };
+
+  const handleBackspace = (index) => {
+    if (levelData.Hint[index] !== '_') {
+      return;
+    }
+
+    backspaceHandledRef.current = true;
+
+    const newInput = [...userInput];
+
+    if (newInput[index]) {
+      newInput[index] = '';
+      setUserInput(newInput);
+      setActiveIndex(index);
+      return;
+    }
+
+    const previousIndex = getPreviousEditableIndex(index);
+
+    if (previousIndex !== -1) {
+      newInput[previousIndex] = '';
+      setUserInput(newInput);
+      inputRefs.current[previousIndex]?.focus();
     }
   };
 
@@ -184,53 +280,111 @@ const user=useSelector(state=>state.user)
   };
 
   const checkAnswer = async () => {
-    const attempt = userInput.join('');
+  const attempt = userInput.join('').toLowerCase();
 
-    if (attempt === levelData.Word) {
-      setFeedback('PERFECT ✨');
-      
-      setTimeout(() => {
-        dispatch(completeLevel(currentLevel));
-      }, 1000);
-    } else {
-      setFeedback('TRY AGAIN');
-      triggerShake();
-    }
-  };
+  const validAnswers = levelData.AcceptedAnswers.map(
+    answer => answer.toLowerCase()
+  );
 
+  if (validAnswers.includes(attempt)) {
+    setFeedback('PERFECT ✨');
+
+    setTimeout(() => {
+      dispatch(completeLevel(currentLevel));
+    }, 1000);
+  } else {
+    setFeedback('TRY AGAIN');
+    triggerShake();
+  }
+};
   const handleHint = async () => {
-    if (levelData && levelData.Word) {
-      await fetchWordInfo(levelData.Word);
-    }
+  if (levelData?.AcceptedAnswers?.length) {
+  await fetchWordInfo(levelData.AcceptedAnswers[0]);
+}
   };
+const getResponsiveConfig = () => {
+  const length = levelData?.Hint?.length || 1;
+  return getResponsiveConfigForLength(length);
+};
 
-  const renderInputs = () => {
-    return userInput.map((letter, index) => {
-      const isFixed = levelData.Hint[index] !== '_';
+const layoutConfig = getResponsiveConfig();
+const totalEditable = levelData
+  ? levelData.Hint.split('').filter(char => char === '_').length
+  : 0;
+const filledCount = levelData
+  ? userInput.reduce((count, letter, index) => {
+      if (levelData.Hint[index] === '_' && letter) {
+        return count + 1;
+      }
 
-      return (
-        <Animated.View
-          key={index}
-          style={{
-            transform: [{ translateX: shakeAnim }],
-          }}
-        >
-          <TextInput
-            ref={el => (inputRefs.current[index] = el)}
+      return count;
+    }, 0)
+  : 0;
+
+const renderInputs = () => {
+return (
+  <View style={styles.inputShell}>
+    <View style={styles.inputGrid}>
+      {userInput.map((letter, index) => {
+        const isFixed = levelData.Hint[index] !== '_';
+        const isActive = activeIndex === index;
+
+        return (
+          <Animated.View
+            key={index}
             style={[
-              styles.input,
-              isFixed ? styles.fixedInput : styles.editableInput,
+              styles.cellWrap,
+              {
+                width: layoutConfig.cellSize,
+                height: layoutConfig.cellSize + 10,
+                marginRight: layoutConfig.gap,
+                marginBottom: layoutConfig.gap,
+                transform: [
+                  { translateX: shakeAnim },
+                  { scale: isActive ? 1.04 : 1 },
+                ],
+              },
+              isActive && styles.activeCellWrap,
             ]}
-            value={letter}
-            editable={!isFixed}
-            maxLength={1}
-            autoCapitalize="none"
-            onChangeText={val => handleInput(val, index)}
-          />
-        </Animated.View>
-      );
-    });
-  };
+          >
+            <TextInput
+              ref={el => (inputRefs.current[index] = el)}
+              style={[
+                styles.input,
+                {
+                  width: layoutConfig.cellSize,
+                  height: layoutConfig.cellSize + 10,
+                  fontSize: layoutConfig.fontSize,
+                },
+                isFixed ? styles.fixedInput : styles.editableInput,
+                isActive && styles.activeInput,
+              ]}
+              value={letter}
+              editable={!isFixed}
+              maxLength={1}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardAppearance="dark"
+              selectionColor="#8B5CF6"
+              placeholderTextColor="#64748B"
+              onFocus={() => setActiveIndex(index)}
+              onChangeText={val => handleInput(val, index)}
+              onKeyPress={({ nativeEvent }) => {
+                if (nativeEvent.key === 'Backspace') {
+                  handleBackspace(index);
+                }
+              }}
+            />
+          </Animated.View>
+        );
+      })}
+    </View>
+   
+  </View>
+
+);
+};
+
 
   if (loading) {
     return (
@@ -257,6 +411,8 @@ const user=useSelector(state=>state.user)
         <ScrollView
           contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
+          nestedScrollEnabled
+          keyboardShouldPersistTaps="handled"
         >
           {/* HEADER */}
 
@@ -286,10 +442,8 @@ const user=useSelector(state=>state.user)
                 activeOpacity={0.8}
                onPress={async () => {
   if (points <= 0) {
-    Alert.alert(
-      'No Points',
-      'Complete more levels to earn points!',
-    );
+showToast( `No Points,Complete more levels to earn points!`, "failure");
+
 
     return;
   }
@@ -368,13 +522,28 @@ showToast("Failed to Claim  Aura, Try again", "error");
 
             {/* INPUTS */}
 
-          <ScrollView
-  horizontal
-  showsHorizontalScrollIndicator={false}
-  contentContainerStyle={styles.wordContainer}
->
-  {renderInputs()}
-</ScrollView>
+            {renderInputs()}
+
+            <View style={styles.progressBlock}>
+              <View style={styles.progressMetaRow}>
+                <Text style={styles.progressLabel}>COMPLETION</Text>
+                <Text style={styles.progressValue}>
+                  {filledCount}/{totalEditable}
+                </Text>
+              </View>
+
+              <View style={styles.progressTrack}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    {
+                      width: `${totalEditable ? (filledCount / totalEditable) * 100 : 0}%`,
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+
             {!!feedback && (
               <Text style={styles.feedback}>{feedback}</Text>
             )}
@@ -563,15 +732,44 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-wordContainer:  
-{ flexDirection: 'row',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: 12,
-  paddingHorizontal: 10,
-  marginBottom: 28,
-  flexGrow: 1,
-},
+  inputShell: {
+    marginBottom: 18,
+    borderRadius: 28,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(139,92,246,0.15)',
+  },
+
+  inputGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+
+  wordRevealHint: {
+    marginTop: 12,
+    color: '#94A3B8',
+    textAlign: 'center',
+    fontSize: 12,
+    letterSpacing: 0.6,
+  },
+
+  cellWrap: {
+    borderRadius: 22,
+  },
+
+  activeCellWrap: {
+    shadowColor: '#8B5CF6',
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+  },
+
   input: {
     width: 58,
     height: 70,
@@ -584,14 +782,61 @@ wordContainer:
   },
 
   editableInput: {
-    backgroundColor: '#111827',
-    borderColor: '#374151',
+    backgroundColor: 'rgba(17,24,39,0.95)',
+    borderColor: 'rgba(148,163,184,0.24)',
   },
 
   fixedInput: {
-    backgroundColor: 'rgba(139,92,246,0.15)',
-    borderColor: '#8B5CF6',
-    color: '#C4B5FD',
+    backgroundColor: 'rgba(139,92,246,0.14)',
+    borderColor: 'rgba(139,92,246,0.55)',
+    color: '#DDD6FE',
+  },
+
+  activeInput: {
+    borderColor: '#A78BFA',
+    backgroundColor: 'rgba(139,92,246,0.12)',
+    shadowColor: '#8B5CF6',
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+
+  progressBlock: {
+    marginBottom: 18,
+  },
+
+  progressMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+
+  progressLabel: {
+    color: '#94A3B8',
+    fontSize: 11,
+    letterSpacing: 2,
+    fontWeight: '700',
+  },
+
+  progressValue: {
+    color: '#E2E8F0',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  progressTrack: {
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    overflow: 'hidden',
+  },
+
+  progressFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: '#8B5CF6',
   },
 
   feedback: {

@@ -8,7 +8,14 @@ import Animated, {
   Easing
 } from 'react-native-reanimated';
 
-const WinOverlay = ({ visible, onNextLevel,claimReward }) => {
+const WinOverlay = ({
+  visible,
+  onNextLevel,
+  claimReward,
+  rewardAmount = 0,
+  claimDisabled = false,
+  claimLabel,
+}) => {
   const opacity = useSharedValue(0);
   const scale = useSharedValue(0.5);
 
@@ -42,8 +49,15 @@ const WinOverlay = ({ visible, onNextLevel,claimReward }) => {
           <Text style={styles.buttonText}>Play Next Level</Text>
         </TouchableOpacity>
 
-         <TouchableOpacity style={styles.claimButton} onPress={claimReward} activeOpacity={0.8}>
-          <Text style={styles.buttonText}>Claim Reward</Text>
+         <TouchableOpacity
+           style={[styles.claimButton, claimDisabled && styles.claimButtonDisabled]}
+           onPress={claimReward}
+           activeOpacity={0.8}
+           disabled={claimDisabled}
+         >
+          <Text style={styles.buttonText}>
+            {claimLabel || (rewardAmount > 0 ? `Claim ${rewardAmount} Aura` : "Claim Reward")}
+          </Text>
         </TouchableOpacity>
       </Animated.View>
     </Animated.View>
@@ -94,6 +108,9 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     borderRadius: 30,
     marginTop: 15,
+  },
+  claimButtonDisabled: {
+    backgroundColor: 'rgba(80,250,123,0.35)',
   },
   buttonText: {
     color: '#1a1b26',

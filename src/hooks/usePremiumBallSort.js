@@ -8,7 +8,9 @@ export const usePremiumBallSort = ({ level, capacity, colors }) => {
   const [history, setHistory] = useState([]);
   const [selectedTube, setSelectedTube] = useState(-1);
   const [hasWon, setHasWon] = useState(false);
+  const [hasLost, setHasLost] = useState(false);
   const [isMoving, setIsMoving] = useState(false);
+  const [movesUsed, setMovesUsed] = useState(0);
   
   // To avoid unneeded re-renders on layout
   const tubeLayouts = useRef({});
@@ -19,6 +21,7 @@ export const usePremiumBallSort = ({ level, capacity, colors }) => {
   const emptyTubes = numColors <= 5 ? 2 : 3;
   const numTubes = numColors + emptyTubes;
   const shuffleDepth = Math.max(50, numColors * 30);
+  const moveLimit = Math.max(numColors * (capacity - 1) + 6, 18);
 
   // Initialize Level
   const initLevel = useCallback(() => {
@@ -28,32 +31,40 @@ export const usePremiumBallSort = ({ level, capacity, colors }) => {
     setHistory([]);
     setSelectedTube(-1);
     setHasWon(false);
+    setHasLost(false);
     setIsMoving(false);
-  }, [level, numColors, numTubes, capacity, colors, shuffleDepth]);
+    setMovesUsed(0);
+  }, [numColors, numTubes, capacity, colors, shuffleDepth]);
 
   useEffect(() => {
     initLevel();
-  }, [initLevel]);
+  }, [initLevel, level]);
 
   // Check Win condition
   useEffect(() => {
     if (tubes.length > 0 && isWin(tubes, capacity)) {
       setHasWon(true);
+      setHasLost(false);
+      return;
     }
-  }, [tubes, capacity]);
+
+    if (movesUsed >= moveLimit && !hasWon) {
+      setHasLost(true);
+    }
+  }, [tubes, capacity, hasWon, moveLimit, movesUsed]);
 
   const onTubeLayout = useCallback((index, layout) => {
     tubeLayouts.current[index] = layout;
   }, []);
 
   const handleUndo = useCallback(() => {
-    if (isMoving || hasWon || history.length === 0) return;
+    if (isMoving || hasWon || hasLost || history.length === 0) return;
     const newHistory = [...history];
     const prevTubes = newHistory.pop();
     setTubes(prevTubes);
     setHistory(newHistory);
     setSelectedTube(-1);
-  }, [isMoving, hasWon, history]);
+  }, [isMoving, hasLost, hasWon, history]);
 
   const handleRestart = useCallback(() => {
     if (isMoving) return;
@@ -61,12 +72,16 @@ export const usePremiumBallSort = ({ level, capacity, colors }) => {
   }, [isMoving, initLevel]);
 
   const handleHint = useCallback(() => {
-    if (isMoving || hasWon) return;
+    if (isMoving || hasWon || hasLost) return;
     const validMoves = getValidMoves(tubes, capacity);
     if (validMoves.length > 0) {
       setSelectedTube(validMoves[0][0]); // Select the source tube of a valid move
     }
-  }, [tubes, capacity, isMoving, hasWon]);
+  }, [tubes, capacity, isMoving, hasLost, hasWon]);
+
+  const registerMove = useCallback(() => {
+    setMovesUsed(prev => prev + 1);
+  }, []);
 
   return {
     tubes,
@@ -76,8 +91,13 @@ export const usePremiumBallSort = ({ level, capacity, colors }) => {
     selectedTube,
     setSelectedTube,
     hasWon,
+    hasLost,
     isMoving,
     setIsMoving,
+    movesUsed,
+    moveLimit,
+    movesRemaining: Math.max(moveLimit - movesUsed, 0),
+    registerMove,
     tubeLayouts,
     onTubeLayout,
     handleUndo,

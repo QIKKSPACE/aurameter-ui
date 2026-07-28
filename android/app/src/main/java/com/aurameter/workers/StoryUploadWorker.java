@@ -129,7 +129,7 @@ if (serverResponse.blurhash != null) {
         String LINE_FEED = "\r\n";
 
         try {
-            URL url = new URL("http://localhost:5001/story/uploadStory");
+            URL url = new URL("https://api.aurameter.in/story/uploadStory");
 
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");

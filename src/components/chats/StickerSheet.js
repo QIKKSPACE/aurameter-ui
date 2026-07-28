@@ -43,16 +43,17 @@ const [linkError, setLinkError] = useState("");
  {
     id: "Galalry",
     icon: <Icon name="image" size={24} color="#fff" />,
-    label: "Gallary",
+    label: "Gallery",
     onPress: () => pickImage(),
   },
+   /*
    {
   id: "quiz",
   icon: <Icon name="help-circle" size={24} color="#fff" />,
   label: "Quiz",
   onPress: () => setMode("quiz"),
-}
-  ];
+} */
+  ];  
 
   const pickImage = () => {
     launchImageLibrary({ mediaType: "photo", quality: 0.8 }, (res) => {

@@ -22,10 +22,18 @@ import quizReducer from "./quizSlice";
 import deviceReducer from "./deviceSlice";
 import wordGameReducer from "./wordGameSlice";
 import ballSortReducer from "./ballSortSlice";
+import kenkenReducer from "./kenkenSlice";
+import zipReducer from "./zipSlice";
+import game2048Reducer from "./game2048Slice";
+import mathMazeReducer from "./mathMazeSlice";
+import bannerReducer from "./bannerSlice";
+import journalReducer from "./journalSlice";
+import ticTacToeReducer from "./ticTacToeSlice";
+
 import { messageGapListener } from "./messageGapListener";
 
 
-    
+
 import { createTransform } from "redux-persist";
 export const LOGOUT = "LOGOUT";
 export const logout = () => ({ type: LOGOUT });
@@ -110,8 +118,46 @@ const messagesTransform = createTransform(
 
   { whitelist: ["messages"] }
 );
+const mathPuzzleTransform = createTransform(
+  (inboundState) => ({
+    level: inboundState.level,
+    score: inboundState.score,
+    completedLevels: inboundState.completedLevels,
+    hintUsed: inboundState.hintUsed,
+    lastReward: inboundState.lastReward,
+    puzzle: inboundState.puzzle,
+  }),
+  (outboundState) => ({
+    level: outboundState.level ?? 1,
+    score: outboundState.score ?? 0,
+    completedLevels: outboundState.completedLevels ?? 0,
+    hintUsed: outboundState.hintUsed ?? false,
+    lastReward: outboundState.lastReward ?? 0,
+    puzzle: outboundState.puzzle,
+  }),
+  { whitelist: ["mathPuzzle"] }
+);
 
-
+const tetrisTransform = createTransform(
+  (inboundState) => ({
+    auraEarned: inboundState.auraEarned,
+  }),
+  (outboundState) => ({
+    status: "idle",
+    score: 0,
+    level: 1,
+    linesCleared: 0,
+    dropInterval: 400,
+    board: Array.from({ length: 20 }, () => Array(10).fill(0)),
+    currentPiece: null,
+    nextPiece: null,
+    startedAt: null,
+    pausedAt: null,
+    auraEarned: outboundState.auraEarned ?? 0,
+    lastAuraCheckpoint: 0,
+  }),
+  { whitelist: ["tetrisGame"] }
+);
 
 const persistConfig = {
   key: "root",
@@ -120,9 +166,8 @@ const persistConfig = {
         "story",        // ✅ persist story
     "leaderboard",  // ✅ persist leaderboard
     "connect",  // ✅ persist leaderboard
-    "chats",
-    "messages","device","wordGame","ballSort"],
-  transforms: [storyTransform,chatTransform,messagesTransform],
+    "chats","device","wordGame","ballSort","tetrisGame","mathPuzzle","kenken","sudoku","zip","game2048","mathMaze","journal","ticTacToe"],
+  transforms: [storyTransform,chatTransform,mathPuzzleTransform,tetrisTransform],
 };
 
 const appReducer = combineReducers({
@@ -145,6 +190,13 @@ const appReducer = combineReducers({
        device: deviceReducer,
        wordGame: wordGameReducer,
        ballSort: ballSortReducer,
+       kenken: kenkenReducer,
+       zip: zipReducer,
+       game2048: game2048Reducer,
+       mathMaze: mathMazeReducer,
+       banner: bannerReducer,
+       journal: journalReducer,
+       ticTacToe: ticTacToeReducer,
 });
 const rootReducer = (state, action) => {
   if (action.type === LOGOUT) {

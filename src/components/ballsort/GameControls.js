@@ -43,8 +43,9 @@ const ControlButton = ({ icon, onPress, disabled }) => {
   );
 };
 
-const GameControls = ({ level, onUndo, onRestart, onHint, onHelp, theme }) => {
+const GameControls = ({ level, movesUsed, moveLimit, onUndo, onRestart, onHint, onHelp, theme }) => {
   const navigation = useNavigation();
+  const movesRemaining = Math.max(moveLimit - movesUsed, 0);
 
   return (
     <View style={styles.container}>
@@ -52,7 +53,10 @@ const GameControls = ({ level, onUndo, onRestart, onHint, onHelp, theme }) => {
         <ControlButton icon="arrow-back" onPress={() => navigation.goBack()} />
       </View>
       
-      <Text style={styles.levelText}>Level {level}</Text>
+      <View style={styles.centerSection}>
+        <Text style={styles.levelText}>Level {level}</Text>
+        <Text style={styles.movesText}>Moves {movesRemaining}/{moveLimit}</Text>
+      </View>
       
       <View style={styles.actions}>
         <ControlButton icon="help-outline" onPress={onHelp} />
@@ -80,6 +84,10 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'flex-start',
   },
+  centerSection: {
+    flex: 1,
+    alignItems: 'center',
+  },
   levelText: {
     fontSize: 20,
     fontWeight: '800',
@@ -87,8 +95,13 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
-    flex: 1,
     textAlign: 'center',
+  },
+  movesText: {
+    marginTop: 2,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#a9b1d6',
   },
   actions: {
     flex: 2,

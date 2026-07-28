@@ -10,6 +10,7 @@ FlatList,
 Modal,
 Animated,
 SectionList,
+TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Icon from "react-native-vector-icons/Feather";
@@ -54,12 +55,17 @@ const { theme } = useTheme();
 const [selectedMood, setSelectedMood] = useState(null);
 const [modalVisible, setModalVisible] = useState(false);
 const navigation=useNavigation()
-
+const [searchMode, setSearchMode] = useState(false);
+const [searchQuery, setSearchQuery] = useState("");
 const chats=useSelector(state => state.auraChat.messages)
 const allchats =useSelector(state => state.auraChat)
 const user=useSelector(state => state.user.userData)
 const userchats=useSelector(state => state.chats)
-
+const filteredChats = userchats.chats.filter(chat =>
+(chat?.other_username || "")
+.toLowerCase()
+.includes(searchQuery.toLowerCase())
+);
 useEffect(() => {
 if (user?.mood) {
 const moodObj = moods.find(m => m.label === user.mood);
@@ -163,13 +169,9 @@ style={styles.profilePic}
 />
 )}
 <View>
-<AppText variant="h4"style={[ { color: theme.text.primary,fontSize:18 }]}>{user?.name}</AppText>
+<AppText variant="h4"style={[ { color: theme.text.primary,fontSize:18 }]}>{user?.username || user?.name}</AppText>
 
-<View style={styles.streakContainer}>
-          <MaterialIcon name="whatshot" size={16} color="#A45EE5" />
-<AppText variant="body" style={[{fontWeight:800,fontSize:12,marginLeft:4}]}>{user?.streak || 0}</AppText>
-<AppText variant="caption" style={{fontSize:10,marginLeft:4,fontWeight:800}}>Streak</AppText>
-</View>
+
 </View>
 </View>
 
@@ -196,16 +198,78 @@ resizeMode="contain"
 
 {/* Inbox Label */}
 <View style={styles.inboxRow}>
-<AppText  variant ="h3"style={[ { color: theme.text.primary,fontSize:24,fontWeight:800 }]}>Inbox</AppText>
-<View  style={{marginRight:10}}>
-<Icon name="search" size={22} color={theme.text.primary}  />
+{searchMode ? (
+<View
+style={[
+styles.searchContainer,
+{ backgroundColor: theme.components.card }
+]}
+>
+<Icon
+name="search"
+size={18}
+color={theme.text.secondary}
+style={{ marginLeft: 10 }}
+/>
 
+<TextInput
+placeholder="Search chats..."
+placeholderTextColor={theme.text.secondary}
+value={searchQuery}
+onChangeText={setSearchQuery}
+autoFocus
+style={[
+styles.searchInput,
+{ color: theme.text.primary }
+]}
+/>
+
+<TouchableOpacity
+onPress={() => {
+setSearchMode(false);
+setSearchQuery("");
+}}
+>
+<Icon
+name="x"
+size={20}
+color={theme.text.primary}
+style={{ marginHorizontal: 10 }}
+/>
+</TouchableOpacity>
 </View>
+) : (
+<>
+<AppText
+variant="h3"
+style={[
+{
+color: theme.text.primary,
+fontSize: 24,
+fontWeight: "800",
+},
+]}
+>
+Inbox
+</AppText>
+
+<TouchableOpacity
+style={{ marginRight: 10 }}
+onPress={() => setSearchMode(true)}
+>
+<Icon
+name="search"
+size={22}
+color={theme.text.primary}
+/>
+</TouchableOpacity>
+</>
+)}
 </View>
 <SectionList
 sections={[
 { title: "Aura", data: Auramessages, type: "aura" },
-{ title: "Messages", data: userchats.chats, type: "msg" },
+{ title: "Messages", data: filteredChats, type: "msg" },
 ]}
 keyExtractor={(item) =>
 item._sectionType === 'aura'
@@ -258,7 +322,7 @@ marginHorizontal: 18,
 marginTop: 10,
 alignItems: "center",
 },
-profileSection: { flexDirection: "row",justifyContent:'center' },
+profileSection: { flexDirection: "row",justifyContent:'center',alignItems:'center' },
 profilePic: { width: 46, height: 46, borderRadius: 22, marginRight: 10 },
 
 
@@ -330,5 +394,18 @@ paddingVertical: 10,
 borderRadius: 10,
 marginTop: 15,
 alignItems: "center",
+},
+searchContainer: {
+flexDirection: "row",
+alignItems: "center",
+borderRadius: 14,
+height: 46,
+flex: 1,
+},
+
+searchInput: {
+flex: 1,
+fontSize: 15,
+paddingHorizontal: 10,
 },
 });

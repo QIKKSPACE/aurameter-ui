@@ -1,7 +1,12 @@
 import React, { useMemo, useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 import { Canvas, Group, RoundedRect, Rect } from "@shopify/react-native-skia";
-import Animated, { useSharedValue, useDerivedValue, withSpring, withTiming, Easing } from "react-native-reanimated";
+import Animated, {
+  Easing,
+  useDerivedValue,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import {
   BOARD_HEIGHT,
   BOARD_WIDTH,
@@ -120,31 +125,40 @@ function TetrisRenderer({
   
   const relativePieceCells = useMemo(() => getRelativePieceCells(currentPiece), [currentPiece]);
   const ghostPiece = useMemo(() => getGhostPiece(board, currentPiece), [board, currentPiece]);
-  const ghostCells = useMemo(() => getPieceCells(ghostPiece), [ghostPiece]);
   
   const clearingSet = useMemo(() => new Set(clearingRows), [clearingRows]);
 
   const animX = useSharedValue(currentPiece?.x ?? 0);
   const animY = useSharedValue(currentPiece?.y ?? 0);
+  const ghostAnimX = useSharedValue(ghostPiece?.x ?? 0);
+  const ghostAnimY = useSharedValue(ghostPiece?.y ?? 0);
 
   useEffect(() => {
     if (currentPiece) {
-      if (currentPiece.y === 0 && animY.value > 5) {
-        animX.value = currentPiece.x;
-        animY.value = currentPiece.y;
-      } else {
-        animX.value = withSpring(currentPiece.x, { damping: 16, stiffness: 300 });
-        animY.value = withTiming(currentPiece.y, { duration: 60, easing: Easing.linear });
-      }
+      animX.value = withTiming(currentPiece.x, {
+        duration: 90,
+        easing: Easing.out(Easing.cubic),
+      });
+      animY.value = withTiming(currentPiece.y, {
+        duration: 90,
+        easing: Easing.out(Easing.cubic),
+      });
     }
-  }, [currentPiece, animX, animY]);
+    if (ghostPiece) {
+      ghostAnimX.value = ghostPiece.x;
+      ghostAnimY.value = ghostPiece.y;
+    }
+  }, [currentPiece, ghostPiece, animX, animY, ghostAnimX, ghostAnimY]);
 
-  const pieceTransform = useDerivedValue(() => {
-    return [
-      { translateX: animX.value * cellSize },
-      { translateY: animY.value * cellSize },
-    ];
-  });
+  const pieceTransform = useDerivedValue(() => [
+    { translateX: animX.value * cellSize },
+    { translateY: animY.value * cellSize },
+  ]);
+
+  const ghostTransform = useDerivedValue(() => [
+    { translateX: ghostAnimX.value * cellSize },
+    { translateY: ghostAnimY.value * cellSize },
+  ]);
 
   return (
     <Animated.View
@@ -170,8 +184,8 @@ function TetrisRenderer({
 
         <TetrisBackground boardWidth={boardWidth} boardHeight={boardHeight} cellSize={cellSize} />
 
-        <Group>
-          {ghostCells.map((cell, index) => (
+        <Group transform={ghostTransform}>
+          {relativePieceCells.map((cell, index) => (
             <RoundedRect
               key={`ghost-${index}-${cell.x}-${cell.y}`}
               x={cell.x * cellSize + 4}

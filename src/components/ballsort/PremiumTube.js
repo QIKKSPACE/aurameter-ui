@@ -40,6 +40,9 @@ const PremiumTube = ({
       <View style={styles.ballsContainer}>
         {tube.map((color, index) => {
           const isHidden = (index === tube.length - 1) && (index === movingBallIndex);
+          if (isHidden) {
+            return null;
+          }
           const bottom = 8 + (index * (ballSize + 2));
           return (
             <View

@@ -17,6 +17,7 @@ function Cell({ cell, size, borderColor, status }) {
   const scale = useSharedValue(1);
   const shake = useSharedValue(0);
   const glow = useSharedValue(0);
+  const canEdit = cell.editable;
 
   const min = puzzle?.digitRange?.min ?? 0;
   const max = puzzle?.digitRange?.max ?? 9999;
@@ -74,7 +75,7 @@ function Cell({ cell, size, borderColor, status }) {
           borderRadius: Math.max(14, size * 0.24),
           borderColor,
         },
-        cell.editable ? styles.editable : styles.fixed,
+        canEdit ? styles.editable : styles.fixed,
         animatedStyle,
       ]}
     >
@@ -83,7 +84,7 @@ function Cell({ cell, size, borderColor, status }) {
         value={cell.value === null ? "" : String(cell.value)}
         onChangeText={handleChange}
         keyboardType="number-pad"
-        editable={cell.editable}
+        editable={canEdit}
         maxLength={String(max).length}
         style={[
           styles.text,
@@ -95,7 +96,7 @@ function Cell({ cell, size, borderColor, status }) {
         placeholderTextColor="rgba(255,255,255,0.28)"
         textAlign="center"
         selectionColor="#7dd3fc"
-        accessibilityLabel={cell.editable ? "Editable number cell" : "Fixed result cell"}
+        accessibilityLabel={canEdit ? "Editable number cell" : "Fixed result cell"}
       />
     </Animated.View>
   );

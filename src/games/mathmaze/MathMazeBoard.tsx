@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react'
-import { View, PanResponder, useWindowDimensions, Text } from 'react-native'
+import { View, PanResponder, Text } from 'react-native'
 import type { MazePuzzle, PathStep, PathStatus } from './MathMazeTypes'
 import MathMazeCell from './MathMazeCell'
 import MathMazePath from './MathMazePath'
@@ -74,7 +74,10 @@ function MathMazeBoard({
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
+      onMoveShouldSetPanResponderCapture: () => true,
       onShouldBlockNativeResponder: () => true,
+      onPanResponderTerminationRequest: () => false,
 
       onPanResponderGrant: (evt) => {
         const { locationX, locationY } = evt.nativeEvent
@@ -121,7 +124,9 @@ function MathMazeBoard({
           width: boardWidth,
           height: boardHeight,
           position: 'relative',
+          overflow: 'visible',
         }}
+        pointerEvents="box-only"
         {...panResponder.panHandlers}
       >
         <MathMazePath
@@ -165,6 +170,7 @@ function MathMazeBoard({
             paddingHorizontal: 10,
             paddingVertical: 5,
           }}
+          pointerEvents="none"
         >
           <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700' }}>
             START
@@ -183,6 +189,7 @@ function MathMazeBoard({
             paddingHorizontal: 10,
             paddingVertical: 5,
           }}
+          pointerEvents="none"
         >
           <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700' }}>
             END

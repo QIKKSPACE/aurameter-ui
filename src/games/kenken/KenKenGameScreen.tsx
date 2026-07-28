@@ -1,10 +1,10 @@
-import React, { useCallback, useMemo, useEffect, useState } from 'react';
-import { ScrollView, View, useWindowDimensions, TouchableOpacity, Modal, StyleSheet } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ScrollView, View, useWindowDimensions, TouchableOpacity, Modal } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useDispatch, useSelector } from 'react-redux';
 import ScreenBackground from '../../components/ScreenBackground';
 import AppText from '../../components/AppText';
-import { useTheme } from '../../constants/context/ThemeContext';
 import { useKenKen } from './useKenKen';
 import { KenKenBoard } from './KenKenBoard';
 import { KenKenHeader } from './KenKenHeader';
@@ -12,8 +12,10 @@ import { KenKenActionBar } from './KenKenActionBar';
 import { KenKenNumberPad } from './KenKenNumberPad';
 import { KenKenVictoryModal } from './KenKenVictoryModal';
 import { KenKenHowToPlay } from './KenKenHowToPlay';
-import { KENKEN_COLORS, getDifficultyColor } from './KenKenColors';
-import { createKenKenStyles } from './KenKenStyles';
+import { getDifficultyColor } from './KenKenColors';
+import api from '../../services/api';
+import { useToast } from '../../constants/context/ErrorContext';
+import { updateUserData } from '../../store/userSlice';
 
 type Props = {
   navigation: {
@@ -22,31 +24,59 @@ type Props = {
   levelId?: number;
 };
 
-export const KenKenGameScreen = ({ navigation, levelId = 1 }: Props) => {
+export const KenKenGameScreen = ({ navigation, levelId }: Props) => {
+  const dispatch = useDispatch();
   const insets = useSafeAreaInsets();
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const [showVictoryModal, setShowVictoryModal] = useState(false);
+  const [claimingReward, setClaimingReward] = useState(false);
+  const previousLevelIdRef = useRef<number | null>(null);
+  const previousCompletedRef = useRef(false);
+  const { showToast } = useToast();
+  const user = useSelector((state: any) => state.user);
   const {
     gameState,
     elapsedSeconds,
     hintsUsed,
-    isCompleted,
+    totalScore,
+    pendingReward,
     hintMessage,
     highlightedCells,
     hintCellFlash,
     handleCellPress,
     handleNumberInput,
-    handleDelete,
     handleHint,
     handleUndo,
     handleRedo,
     handleClear,
     handleReset,
     handleNextLevel,
+    handleCollectReward,
   } = useKenKen(levelId);
 
   const { width } = useWindowDimensions();
-  const styles = useMemo(() => createKenKenStyles(gameState?.level.gridSize || 4, width), [gameState?.level.gridSize, width]);
+
+  useEffect(() => {
+    if (!gameState) return;
+
+    if (previousLevelIdRef.current !== gameState.level.id) {
+      previousLevelIdRef.current = gameState.level.id;
+      previousCompletedRef.current = gameState.isCompleted;
+      setShowVictoryModal(false);
+      return;
+    }
+
+    if (gameState.isCompleted && !previousCompletedRef.current) {
+      setShowVictoryModal(true);
+    }
+
+    if (!gameState.isCompleted) {
+      setShowVictoryModal(false);
+    }
+
+    previousCompletedRef.current = gameState.isCompleted;
+  }, [gameState]);
 
   useEffect(() => {
     const checkHowToPlay = async () => {
@@ -92,6 +122,38 @@ export const KenKenGameScreen = ({ navigation, levelId = 1 }: Props) => {
     handleNextLevel();
   }, [handleNextLevel]);
 
+  const handleCollectRewardPress = useCallback(async () => {
+    if (claimingReward) return;
+    if (pendingReward <= 0) {
+      showToast('No Points,Complete more levels to earn points!', 'failure');
+      return;
+    }
+
+    setClaimingReward(true);
+
+    try {
+      const response = await api.post('/game/ken-ken-game', {
+        level: gameState.level.id,
+        aura: pendingReward,
+      });
+
+      if (response?.data?.success) {
+        dispatch(
+          updateUserData({
+            aura: (user?.userData?.aura || 0) + pendingReward,
+          })
+        );
+        handleCollectReward();
+        showToast(`You claimed ${pendingReward} points.`, 'success');
+      }
+    } catch (err) {
+      console.error('Claim reward error:', err?.response?.data || err.message);
+      showToast('Failed to Claim  Aura, Try again', 'error');
+    } finally {
+      setClaimingReward(false);
+    }
+  }, [claimingReward, dispatch, gameState?.level?.id, handleCollectReward, pendingReward, showToast, user?.userData?.aura]);
+
   if (!gameState) {
     return (
       <ScreenBackground>
@@ -109,7 +171,18 @@ export const KenKenGameScreen = ({ navigation, levelId = 1 }: Props) => {
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <KenKenHeader elapsedSeconds={elapsedSeconds} onBack={handleBackPress} onInfo={handleInfoPress} />
 
-        <View style={{ alignSelf: 'center', marginTop: 8, marginBottom: 8 }}>
+        <View
+          style={{
+            alignSelf: 'center',
+            marginTop: 8,
+            marginBottom: 8,
+            flexDirection: 'row',
+            gap: 8,
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            justifyContent: 'center',
+          }}
+        >
           <View
             style={{
               paddingHorizontal: 10,
@@ -127,6 +200,25 @@ export const KenKenGameScreen = ({ navigation, levelId = 1 }: Props) => {
               }}
             >
               {gameState.level.difficulty.toUpperCase()}
+            </AppText>
+          </View>
+          <View
+            style={{
+              paddingHorizontal: 10,
+              paddingVertical: 4,
+              borderRadius: 10,
+              backgroundColor: '#2C2C2E',
+            }}
+          >
+            <AppText
+              style={{
+                fontSize: 11,
+                fontWeight: '600',
+                color: '#FFFFFF',
+                textAlign: 'center',
+              }}
+            >
+              SCORE {pendingReward}
             </AppText>
           </View>
         </View>
@@ -165,6 +257,42 @@ export const KenKenGameScreen = ({ navigation, levelId = 1 }: Props) => {
           </View>
         )}
 
+    {pendingReward > 0 && (
+          <View
+            style={{
+              marginHorizontal: 24,
+              marginBottom: 8,
+              borderRadius: 14,
+              padding: 12,
+              backgroundColor: '#1C1C1E',
+            }}
+          >
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={handleCollectRewardPress}
+              disabled={pendingReward <= 0 || claimingReward}
+              style={{
+                height: 48,
+                borderRadius: 12,
+                backgroundColor: pendingReward > 0 && !claimingReward ? '#F5C542' : '#2C2C2E',
+                justifyContent: 'center',
+                alignItems: 'center',
+                opacity: claimingReward ? 0.7 : 1,
+              }}
+            >
+              <AppText
+                style={{
+                  color: pendingReward > 0 ? '#111111' : 'rgba(255,255,255,0.6)',
+                  fontSize: 14,
+                  fontWeight: '800',
+                }}
+              >
+                {claimingReward ? 'COLLECTING...' : pendingReward > 0 ? 'COLLECT REWARD' : 'REWARD COLLECTED'}
+              </AppText>
+            </TouchableOpacity>
+          </View>
+        
+              )}
         <KenKenActionBar
           onUndo={handleUndo}
           onClear={handleClear}
@@ -177,13 +305,23 @@ export const KenKenGameScreen = ({ navigation, levelId = 1 }: Props) => {
         </View>
 
         <KenKenVictoryModal
-          visible={isCompleted}
+          visible={showVictoryModal}
           elapsedSeconds={elapsedSeconds}
           levelId={gameState.level.id}
+          score={totalScore}
           hintsUsed={hintsUsed}
-          onReplay={handleReset}
-          onNextLevel={handleNextLevelPress}
-          onHome={handleHomePress}
+          onReplay={() => {
+            setShowVictoryModal(false);
+            handleReset();
+          }}
+          onNextLevel={() => {
+            setShowVictoryModal(false);
+            handleNextLevelPress();
+          }}
+          onHome={() => {
+            setShowVictoryModal(false);
+            handleHomePress();
+          }}
         />
 
         {showHowToPlay && <KenKenHowToPlay onContinue={handleHowToPlayContinue} />}

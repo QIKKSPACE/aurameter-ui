@@ -221,7 +221,6 @@ const StepTrackerScreen = ({ navigation }) => {
   const [permDenied, setPermDenied] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
-const user=useSelector(state=>state.user?.userData)
 const [showClaimModal, setShowClaimModal] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -230,6 +229,7 @@ const [showClaimModal, setShowClaimModal] = useState(false);
 const MIN_STEPS = 5000;
   const goal = 5000;
 const { showToast } = useToast();
+const user=useSelector(state=>state.user?.userData)
 
   const remaining = Math.max(goal - steps, 0);
   const calories = Math.round(steps * 0.04);
@@ -525,7 +525,12 @@ const openHealthConnectSettings = async () => {
 >
   <View style={styles.claimOverlay}>
     <View style={styles.claimCard}>
-
+  <TouchableOpacity
+        style={styles.claimCloseButton}
+        onPress={() => setShowClaimModal(false)}
+      >
+        <Icon name="close" size={18} color="#8E8E9A" />
+      </TouchableOpacity>
       <Text style={styles.claimEmoji}>
         🎉
       </Text>
@@ -1044,5 +1049,17 @@ claimButtonText: {
   color: '#fff',
   fontSize: 16,
   fontWeight: '700',
+},
+claimCloseButton: {
+  position: 'absolute',
+  top: 14,
+  right: 14,
+  width: 34,
+  height: 34,
+  borderRadius: 17,
+  backgroundColor: 'rgba(255,255,255,0.06)',
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 10,
 },
 });

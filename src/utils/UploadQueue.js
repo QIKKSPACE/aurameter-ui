@@ -85,7 +85,7 @@ export const addToUploadQueue = async (item) =>
       ...data.items,
       {
         ...item,
-        status: "LOCAL_QUEUED",
+        status: "PENDING",
         createdAt: Date.now(),
         updatedAt: Date.now(),
       },

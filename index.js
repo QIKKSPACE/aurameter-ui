@@ -11,6 +11,7 @@ import { addSocketMessage } from "./src/store/messageSlice";
 import { updateChatLastMessage } from "./src/store/chatSlice";
 import { markSeenByAiUpTo, prependMessage, setAiThinking } from './src/store/AuraChatSlice';
 import { incrementUnreadChats } from './src/store/unreadSlice';
+import { shouldIncrementUnreadForMessage } from "./src/utils/unread";
 
 messaging().setBackgroundMessageHandler(async remoteMessage => {
   const data = remoteMessage.data || {};
@@ -22,23 +23,7 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
       message: parsed,
     }));
  const state = store.getState();
-    const currentUserId = state.user.userData?.id;
-    const chat = state.chats.chats.find(c => c.chat_id === data?.chatId);
-
-    if (!chat) return;
-
-    // Ignore self messages
-    if (parsed?.sender_id === currentUserId) return;
-
-    const lastSeenSeq = chat.last_seen_seq ?? 0;
-    const lastMessageSeq = chat.last_message_seq ?? 0;
-  
-    /**
-     * ✅ Chat already had unread messages IF
-     * last_message_seq > last_seen_seq
-     */
-    const alreadyUnread = lastMessageSeq > lastSeenSeq;
-   if (!alreadyUnread) {
+   if (shouldIncrementUnreadForMessage(state, data.chatId, parsed)) {
       store.dispatch(incrementUnreadChats());
     }
     store.dispatch(updateChatLastMessage({

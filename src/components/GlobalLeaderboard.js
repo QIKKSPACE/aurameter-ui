@@ -33,8 +33,8 @@ const GlobalLeaderboard = ({ navigation, isProfileCompletion,userId }) => {
     );
   };
 
-  const renderItem = ({ item, index }) => {
-    const rank = index + 1;
+const renderItem = ({ item }) => {
+  const rank = item.rank;
 
     return (
       <TouchableOpacity
@@ -58,8 +58,14 @@ const GlobalLeaderboard = ({ navigation, isProfileCompletion,userId }) => {
         <View style={styles.rankContainer}>{renderRank(rank)}</View>
 
         {/* Avatar */}
-        <Image source={{ uri: item.avatar }} style={styles.avatar} />
-
+            <Image  
+          source={
+            item.avatar
+              ? { uri: item.avatar }
+              : require("../assets/newframe.png")
+          }
+          style={styles.avatar}
+        />
         {/* Username */}
         <View style={styles.infoContainer}>
           <AppText

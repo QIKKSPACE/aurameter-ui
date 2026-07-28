@@ -16,7 +16,7 @@ export const fetchMessages = createAsyncThunk(
   async ({ chatId, cursor }, { rejectWithValue }) => {
     try {
       // 🔑 cursor = before_seq
-      const params = cursor
+      const params = cursor 
         ? { before_seq: cursor }
         : {};
 

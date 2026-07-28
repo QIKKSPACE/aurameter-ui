@@ -11,7 +11,13 @@ import {
     StyleSheet,
     ScrollView,
     StatusBar,
+    ActivityIndicator,
 } from 'react-native';
+import { useSelector, useDispatch } from 'react-redux';
+import api from '../../services/api';
+import { useToast } from '../../constants/context/ErrorContext';
+import { updateUserData } from '../../store/userSlice';
+import { claimAura } from '../../store/ticTacToeSlice';
 import { useTicTacToeContext } from './TicTacToeContext';
 import AnimatedBackground from './AnimatedBackground';
 import XPBar from './XPBar';
@@ -28,6 +34,30 @@ const LevelScreen = ({ navigation }) => {
         theme,
         beatenLevels,
     } = useTicTacToeContext();
+    const score = useSelector((state) => state.ticTacToe?.score || 0);
+    const aura = useSelector((state) => state.ticTacToe?.aura || 0);
+    const user = useSelector((state) => state.user);
+    const dispatch = useDispatch();
+    const { showToast } = useToast();
+    const [collectingAura, setCollectingAura] = React.useState(false);
+
+    const handleCollectAura = useCallback(async () => {
+        if (collectingAura || aura <= 0) return;
+        try {
+            setCollectingAura(true);
+            const response = await api.post('/game/tic-tac-toe', { aura });
+            if (response?.data?.success) {
+                dispatch(claimAura());
+                dispatch(updateUserData({ aura: (user?.userData?.aura || 0) + aura }));
+                showToast(`You claimed ${aura} Aura.`, 'success');
+            }
+        } catch (err) {
+            console.log('Claim aura error:', err?.response?.data || err.message);
+            showToast('Failed to Claim Aura, Try again', 'error');
+        } finally {
+            setCollectingAura(false);
+        }
+    }, [aura, collectingAura, dispatch, showToast, user?.userData?.aura]);
 
     const handleSelectLevel = useCallback(
         (levelId) => {
@@ -181,12 +211,52 @@ const LevelScreen = ({ navigation }) => {
                             Best
                         </Text>
                     </View>
+                    <View style={styles.statCard}>
+                        <Text style={styles.statIcon}>🎯</Text>
+                        <Text style={[styles.statValue, { color: theme.accentColor }]}>
+                            {score}
+                        </Text>
+                        <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
+                            Score
+                        </Text>
+                    </View>
                 </View>
 
                 <View
                     style={[styles.summaryCard, { backgroundColor: theme.cardBg, borderColor: theme.boardBorder }]}
                 >
                     <XPBar xp={xp} progress={xpProgress} theme={theme} />
+                    <Text style={[styles.rulesText, { color: theme.textSecondary }]}>
+                        Scoring: win + level points, lose - level points. Aura banks from wins and can be claimed anytime when it is above zero.
+                    </Text>
+                    {aura > 0 && (
+                        <View style={{ marginTop: 12, padding: 14, borderRadius: 16, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)' }}>
+                            <Text style={[{ fontSize: 16, fontWeight: '700', marginBottom: 10 }, { color: theme.textColor }]}>
+                                Reward Ready: +{aura} AURA
+                            </Text>
+                            <TouchableOpacity
+                                activeOpacity={0.7}
+                                disabled={collectingAura}
+                                onPress={handleCollectAura}
+                                style={{
+                                    backgroundColor: collectingAura ? '#94A3B8' : '#22C55E',
+                                    paddingHorizontal: 22,
+                                    paddingVertical: 12,
+                                    borderRadius: 24,
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                }}
+                            >
+                                {collectingAura ? (
+                                    <ActivityIndicator size="small" color="#000" />
+                                ) : null}
+                                <Text style={{ fontWeight: '700', color: '#000' }}>
+                                    {collectingAura ? 'COLLECTING...' : 'COLLECT AURA'}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
                     {unlockedAchievements.length > 0 && (
                         <View style={styles.achievementRow}>
                             <Text
@@ -281,6 +351,11 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         paddingHorizontal: 12,
         marginBottom: 18,
+    },
+    rulesText: {
+        fontSize: 12,
+        lineHeight: 17,
+        marginTop: 10,
     },
     achievementRow: {
         flexDirection: 'row',

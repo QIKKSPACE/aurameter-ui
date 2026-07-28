@@ -1,5 +1,5 @@
 // components/GlobalLeaderboard.js
-import React from "react";
+import React, { useEffect } from "react";
 import {
   View,
   FlatList,
@@ -15,12 +15,14 @@ import { useSelector } from "react-redux";
 
 const MEDALS = ["🥇", "🥈", "🥉"];
 
-const FollowingLeaderboard = ({ navigation, isProfileCompletion }) => {
+const FollowingLeaderboard = ({ navigation, isProfileCompletion,userId }) => {
   const { theme } = useTheme();
   const { data, loading, error,lastFetched } = useSelector(
     state => state.leaderboard.following
   );
-
+   useEffect(() => {
+    console.log("Following Leaderboard - Data Updated:", data);
+   }, [lastFetched])
   const renderRank = (rank) => {
     if (rank <= 3) {
       return <AppText style={styles.medal}>{MEDALS[rank - 1]}</AppText>;
@@ -37,27 +39,35 @@ const FollowingLeaderboard = ({ navigation, isProfileCompletion }) => {
     const rank = index + 1;
 
     return (
-      <TouchableOpacity
-        activeOpacity={0.85}
-        style={[
-          styles.card,
-          {
-            backgroundColor: theme.components?.card,
-            shadowColor: theme.shadow || "#000",
-            opacity:theme?.opacity.light
-          },
-        ]}
-        onPress={() => {
-          if (!isProfileCompletion) {
-            navigation.navigate("OtherProfile", { userId: item.id });
-          }
-        }}
-      >
+           <TouchableOpacity
+             activeOpacity={0.85}
+             style={[
+               styles.card,
+               {
+                 backgroundColor: theme.components?.card,
+                 shadowColor: theme.shadow || "#000",
+                 opacity:theme?.opacity.light
+               },
+             ]} 
+             onPress={() => {
+               if (!isProfileCompletion) {
+                 if(item.id == userId) return
+                 navigation.navigate("OtherProfile", { userId: item.id });
+               }
+             }}
+           >
         {/* Rank */}
         <View style={styles.rankContainer}>{renderRank(rank)}</View>
 
         {/* Avatar */}
-        <Image source={{ uri: item.avatar }} style={styles.avatar} />
+      <Image  
+  source={
+    item.avatar
+      ? { uri: item.avatar }
+      : require("../assets/newframe.png")
+  }
+  style={styles.avatar}
+/>
 
         {/* Username */}
         <View style={styles.infoContainer}>
@@ -106,6 +116,7 @@ const FollowingLeaderboard = ({ navigation, isProfileCompletion }) => {
 const styles = StyleSheet.create({
   listContainer: {
     padding: 16,
+    
   },
 
   card: {
@@ -113,7 +124,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 10,
     paddingHorizontal: 16,
-    borderRadius: 18,
+    borderRadius: 10,
     marginBottom: 14,
 
     // Premium depth
@@ -139,9 +150,9 @@ const styles = StyleSheet.create({
   },
 
   avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     marginHorizontal: 12,
   },
 

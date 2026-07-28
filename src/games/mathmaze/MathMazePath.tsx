@@ -35,7 +35,12 @@ const MathMazePath = memo(
     const boardHeight = (cellSize + gap) * gridSize - gap
 
     return (
-      <Svg width={boardWidth} height={boardHeight} style={{ position: 'absolute' }}>
+      <Svg
+        width={boardWidth}
+        height={boardHeight}
+        style={{ position: 'absolute' }}
+        pointerEvents="none"
+      >
         <Polyline
           points={points}
           stroke={strokeColor}

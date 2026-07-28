@@ -21,10 +21,10 @@ export type Game2048State = {
   bestScore: number;
   status: GameStatus;
   moveCount: number;
+  claimableAura: number;
 };
 
 export type MoveResult = {
   tiles: Tile[];
-  scoreDelta: number;
   moved: boolean;
 };

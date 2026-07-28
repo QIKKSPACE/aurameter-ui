@@ -77,6 +77,7 @@ const styles = StyleSheet.create({
   },
   image: {
     backgroundColor: "#111827",
+  
   },
   skeleton: {
     height: 180,

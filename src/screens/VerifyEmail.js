@@ -17,7 +17,8 @@ import { useTheme } from "../constants/context/ThemeContext";
 import ScreenBackground from "../components/ScreenBackground";
 import Icon from "react-native-vector-icons/Feather";
 import { useFocusEffect } from "@react-navigation/native";
-import AppText from "../components/AppText";
+import AppText from "../components/AppText";  
+import { useSelector } from "react-redux";
 
 const VerifyEmail = ({ navigation, route }) => {
   const { user,accessToken,refreshToken } = route.params;
@@ -44,7 +45,9 @@ const VerifyEmail = ({ navigation, route }) => {
       }, 3000);
     });
   };
-
+const deviceId = useSelector(
+  state => state.device.deviceId
+);
   const handleChange = (text, index) => {
     const newCode = [...code];
     newCode[index] = text;
@@ -63,10 +66,10 @@ const VerifyEmail = ({ navigation, route }) => {
     }
 
     try {
-      const response = await fetch("http://localhost:5001/auth/verify-signup", {
+      const response = await fetch("https://api.aurameter.in/auth/verify-signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email:user.email, code: fullCode }),
+        body: JSON.stringify({ email:user.email, code: fullCode,deviceId }),
       });
 
       const data = await response.json();
@@ -139,46 +142,65 @@ useFocusEffect(
               {/* Code Inputs */}
               <View style={styles.codeContainer}>
                {code.map((digit, index) => (
-  <TextInput
-    key={index}
-    ref={(el) => (inputs.current[index] = el)}
-    style={[
-      styles.codeInput,
-      {
-        borderColor: theme.components.border,
-        backgroundColor: theme.components.card,
-        color: theme.text.primary,
-      },
-    ]}
-    keyboardType="number-pad"
-    maxLength={1}
-    value={digit}
-    onChangeText={(text) => {
-      const newCode = [...code];
-      newCode[index] = text.slice(-1); // ensure only 1 char
+ <TextInput
+  key={index}
+  ref={(el) => (inputs.current[index] = el)}
+  style={[
+    styles.codeInput,
+    {
+      borderColor: theme.components.border,
+      backgroundColor: theme.components.card,
+      color: theme.text.primary,
+    },
+  ]}
+  keyboardType="number-pad"
+  maxLength={6}
+  value={digit}
+  textContentType="oneTimeCode"
+  autoComplete="sms-otp"
+  importantForAutofill="yes"
+  onChangeText={(text) => {
+    // Handle OTP paste
+    if (text.length > 1) {
+      const pastedDigits = text.replace(/\D/g, "").slice(0, 6).split("");
+
+      const newCode = ["", "", "", "", "", ""];
+
+      pastedDigits.forEach((digit, i) => {
+        newCode[i] = digit;
+      });
+
       setCode(newCode);
 
-      if (text && index < code.length - 1) {
-        inputs.current[index + 1].focus();
-      }
-    }}
-    onKeyPress={({ nativeEvent }) => {
-      if (nativeEvent.key === "Backspace") {
-        const newCode = [...code];
+      const lastIndex = Math.min(pastedDigits.length - 1, 5);
+      inputs.current[lastIndex]?.focus();
 
-        if (digit) {
-          // Clear current box
-          newCode[index] = "";
-          setCode(newCode);
-        } else if (index > 0) {
-          // Move to previous box and clear it
-          newCode[index - 1] = "";
-          setCode(newCode);
-          inputs.current[index - 1].focus();
-        }
+      return;
+    }
+
+    const newCode = [...code];
+    newCode[index] = text;
+    setCode(newCode);
+
+    if (text && index < 5) {
+      inputs.current[index + 1]?.focus();
+    }
+  }}
+  onKeyPress={({ nativeEvent }) => {
+    if (nativeEvent.key === "Backspace") {
+      const newCode = [...code];
+
+      if (digit) {
+        newCode[index] = "";
+        setCode(newCode);
+      } else if (index > 0) {
+        newCode[index - 1] = "";
+        setCode(newCode);
+        inputs.current[index - 1]?.focus();
       }
-    }}
-  />
+    }
+  }}
+/>
 ))}
 
               </View>

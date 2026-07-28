@@ -11,6 +11,7 @@ import { incrementUnreadChats } from "../store/unreadSlice";
 import { markSeenByAiUpTo, prependMessage, setAiError, setAiThinking } from "../store/AuraChatSlice";
 import { store } from "../store/store";
 import { addSocketMessage } from "../store/messageSlice";
+import { shouldIncrementUnreadForMessage } from "../utils/unread";
 
 export const useSockets = () => {
   const dispatch = useDispatch();
@@ -54,25 +55,7 @@ useEffect(() => {
     dispatch(addSocketMessage({ chatId, message }));
 
     const state = store.getState();
-    const currentUserId = state.user.userData?.id;
-    const chat = state.chats.chats.find(c => c.chat_id === chatId);
-
-    if (!chat) return;
-
-    // Ignore self messages
-    if (message.sender_id === currentUserId) return;
-
-    const lastSeenSeq = chat.last_seen_seq ?? 0;
-    const lastMessageSeq = chat.last_message_seq ?? 0;
-
-    /**
-     * ✅ Chat already had unread messages IF
-     * last_message_seq > last_seen_seq
-     */
-    const alreadyUnread = lastMessageSeq > lastSeenSeq;
-
-    // 2️⃣ Increment ONLY if this is the FIRST unread
-    if (!alreadyUnread) {
+    if (shouldIncrementUnreadForMessage(state, chatId, message)) {
       dispatch(incrementUnreadChats());
     }
 

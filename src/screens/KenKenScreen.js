@@ -2,7 +2,7 @@ import React from 'react';
 import { KenKenGameScreen } from '../games/kenken/KenKenGameScreen';
 
 const KenKenScreen = ({ route, navigation }) => {
-  const levelId = route?.params?.levelId || 1;
+  const levelId = route?.params?.levelId;
 
   return <KenKenGameScreen navigation={navigation} levelId={levelId} />;
 };

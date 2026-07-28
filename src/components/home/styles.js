@@ -17,16 +17,16 @@ export const styles = StyleSheet.create({
 
   plusButton: {
     position: "absolute",
-    bottom: 20,
+    bottom: 30,
     right: 0,
-    width: 24,
-    height: 24,
+    width: 30,
+    height: 30,
     borderRadius: 12,
     backgroundColor: "#00E5FF",
     justifyContent: "center",
     alignItems: "center",
   },
-  plusText: { color: "#fff", fontWeight: "bold" },
+  plusText: { color: "#fff", fontWeight: "bold",fontSize: 20 },
 
   fireBadge: { position: "absolute", bottom: 18, right: 0 },
   fireText: {

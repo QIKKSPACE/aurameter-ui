@@ -14,10 +14,11 @@ import ScreenBackground from "../components/ScreenBackground";
 import { useSelector, useDispatch } from "react-redux";
 import { fetchConnections } from "../store/connectSlice";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Icon from "react-native-vector-icons/Feather";
 
 const TEN_MIN = 10 * 60 * 1000;
 
-const FollowersScreen = ({ navigation }) => {
+const FollowersScreen = ({type = "followers", navigation }) => {
   const { theme } = useTheme();
   const dispatch = useDispatch();
 
@@ -85,32 +86,84 @@ const FollowersScreen = ({ navigation }) => {
 
   return (
     <ScreenBackground>
-      <View  style={{ flex: 1 }}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={[styles.headerTitle, { color: theme.text.primary }]}>Followers</Text>
-        </View>
-
-        {/* Followers List */}
-        <FlatList
+       <View style={{ flex: 1 }}>
+         {/* Header */}
+         <View style={styles.header}>
+           <TouchableOpacity
+             style={styles.backButton}
+             onPress={() => navigation.goBack()}
+           >
+             <Icon
+               name="arrow-left"
+               size={22}
+               color={theme.text.primary}
+             />
+           </TouchableOpacity>
+   
+           <Text
+             style={[
+               styles.headerTitle,
+               { color: theme.text.primary },
+             ]}
+           >
+            Followers
+           </Text>
+         </View>
+   
+         {/* Empty State */}
+         {(!followers || followers.length === 0) ? (
+           <View style={styles.emptyContainer}>
+             <Icon
+               name="users"
+               size={60}
+               color={theme.text.secondary}
+             />
+   
+             <Text
+               style={[
+                 styles.emptyTitle,
+                 { color: theme.text.primary },
+               ]}
+             >
+               No {type} Yet
+             </Text>
+   
+             <Text
+               style={[
+                 styles.emptySubtitle,
+                 { color: theme.text.secondary },
+               ]}
+             >
+               {type === "followers"
+                 ? "Nobody is following you yet."
+                 : type === "following"
+                 ? "You're not following anyone yet."
+                 : "You don't have any connections yet."}
+             </Text>
+           </View>
+         ) : (
+                   <FlatList
           data={followers}
           renderItem={renderFollower}
           keyExtractor={(item) => item.id.toString()}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 50 }}
         />
-      </View>
-    </ScreenBackground>
+         )}
+       </View>
+     </ScreenBackground>
   );
 };
 
 export default FollowersScreen;
 
 const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-  },
+ header: {
+  flexDirection: "row",
+  alignItems: "center",
+  paddingHorizontal: 15,
+  paddingVertical: 12,
+},
   headerTitle: {
     fontSize: 20,
     fontWeight: "bold",
@@ -157,4 +210,28 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
   },
+    backButton: {
+  marginRight: 12,
+  padding: 4,
+},
+
+emptyContainer: {
+  flex: 1,
+  justifyContent: "center",
+  alignItems: "center",
+  paddingHorizontal: 30,
+},
+
+emptyTitle: {
+  fontSize: 20,
+  fontWeight: "700",
+  marginTop: 16,
+},
+
+emptySubtitle: {
+  fontSize: 14,
+  textAlign: "center",
+  marginTop: 8,
+  lineHeight: 22,
+},
 });

@@ -7,7 +7,7 @@ export const getSocket = (namespace, listeners = {}) => {
   // ---- normalize namespace ----
   const ns = `/${namespace.replace(/^\//, "")}`;
   let socket = sockets[ns];
-//http://localhost:5001
+//https://api.aurameter.in
   // ---- reuse socket if exists ----
   if (socket) {
     // reconnect if needed
@@ -25,7 +25,7 @@ export const getSocket = (namespace, listeners = {}) => {
   }
 
   // ---- create new socket ----
-  socket = io(`http://localhost:5001${ns}`, {
+  socket = io(`https://api.aurameter.in${ns}`, {
     // dynamic token on every connection attempt
     auth: (cb) => {
       const token = store.getState().user?.token;

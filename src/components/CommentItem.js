@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet, Image, TouchableOpacity } from "react-native";
 import Icon from "react-native-vector-icons/Ionicons";
+import { timeAgo } from "../utils/time";
 
 export default function CommentItem({ comment }) {
   return (
@@ -17,24 +18,9 @@ export default function CommentItem({ comment }) {
         <Text style={styles.text}>{comment.text}</Text>
 
         <View style={styles.metaRow}>
-          <Text style={styles.time}>2m</Text>
+          <Text style={styles.time}>{timeAgo (comment?.created_at)}</Text>
 
-          <TouchableOpacity style={styles.likeBtn}>
-            {comment?.likedByMe?
-              <Icon
-              name="heart"
-              size={14}
-              color={comment.likedByMe ? "#e0245e" : "#888"}
-            />:  <Icon
-              name="heart-outline"
-              size={14}
-              color={comment.likedByMe ? "#e0245e" : "#888"}
-            />}
-          
-            <Text style={styles.likeCount}>
-              {comment.likeCount}
-            </Text>
-          </TouchableOpacity>
+
         </View>
       </View>
     </View>

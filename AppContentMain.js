@@ -28,6 +28,7 @@ import { getSocket, disconnectSocket, detachSocketListeners, detachSocketListene
 import { addMessage, addNewChat, fetchChats, markInitialMessagesFetched, removeChat, 
   selectMessageBootstrapBatch, updateChatLastMessage } from "./src/store/chatSlice";
 import { fetchUnreadCounts, incrementUnreadChats } from "./src/store/unreadSlice";
+import { shouldIncrementUnreadForMessage } from "./src/utils/unread";
 
 import {fetchMessages, syncMessages} from './src/store/messageThunks'
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -122,19 +123,7 @@ useEffect(() => {
 
   // 2️⃣ Get current state
   const state = store.getState();
-  const currentUserId = state.user.userData?.id;
-  const chat = state.chats.chats.find(c => c.chat_id === chatId);
-
-  if (!chat) return;
-
-  // 3️⃣ Check if chat already has unread messages
-  const hasUnread =
-    chat.last_message_at &&
-    (!chat.last_read_at || new Date(chat.last_message_at) > new Date(chat.last_read_at)) &&
-    chat.last_message_by !== currentUserId;
-
-  // 4️⃣ Only increment unread if no unread exists
-  if (!hasUnread && message.sender_id !== currentUserId) {
+  if (shouldIncrementUnreadForMessage(state, chatId, message)) {
     dispatch(incrementUnreadChats());
   }
 

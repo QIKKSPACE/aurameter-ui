@@ -147,21 +147,49 @@ const ThemeSelectionScreen = ({navigation}) => {
           })}
         </View>
 
-        {/* 🔹 Theme cards */}
-        <FlatList
-  data={tabData[activeTab]}
-  keyExtractor={(item) => item.id}
-  renderItem={({ item }) => (
-    <RenderThemeItem
-      item={item}
-      isActive={themeId === item.id}
-      onPress={applyTheme}
-      theme={theme}
+      {tabData[activeTab]?.length > 0 ? (
+  <FlatList
+    data={tabData[activeTab]}
+    keyExtractor={(item) => item.id}
+    renderItem={({ item }) => (
+      <RenderThemeItem
+        item={item}
+        isActive={themeId === item.id}
+        onPress={applyTheme}
+        theme={theme}
+      />
+    )}
+    showsVerticalScrollIndicator={false}
+    contentContainerStyle={{ paddingBottom: 50 }}
+  />
+) : (
+  <View style={styles.emptyContainer}>
+    <MaterialIcon
+      name="palette-outline"
+      size={64}
+      color={theme.text.secondary}
     />
-  )}
-  showsVerticalScrollIndicator={false}
-  contentContainerStyle={{ paddingBottom: 50 }}
-/>
+    <AppText
+      variant="h3"
+      style={[
+        styles.emptyTitle,
+        { color: theme.text.primary }
+      ]}
+    >
+      More Themes Coming Soon
+    </AppText>
+
+    <AppText
+      variant="body"
+      style={[
+        styles.emptySubtitle,
+        { color: theme.text.secondary }
+      ]}
+    >
+      We're working on exciting new themes for this category.
+    </AppText>
+  </View>
+)}
       </View>
     </ScreenBackground>
   );
@@ -228,4 +256,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
+  emptyContainer: {
+  flex: 1,
+  justifyContent: "center",
+  alignItems: "center",
+  paddingHorizontal: 30,
+  marginTop: -200,
+},
+
+emptyTitle: {
+  marginTop: 16,
+  fontSize: 20,
+  fontWeight: "700",
+  textAlign: "center",
+},
+
+emptySubtitle: {
+  marginTop: 8,
+  textAlign: "center",
+  lineHeight: 22,
+},
 });

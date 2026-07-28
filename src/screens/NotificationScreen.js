@@ -207,22 +207,28 @@ const renderNotification = ({ item }) => {
       );
     }
 
-    if (!notifications || notifications.length === 0) {
-      return (
-        <View style={{width:'auto',alignSelf:'center',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
-          <Icon name="bell-off" size={40} color={theme.text.secondary} />
-          <AppText
-          variant="h3"
-            style={[
-              styles.emptyText,
-              { color: theme.text.secondary },
-            ]}
-          >
-            No notifications yet
-          </AppText>
-        </View>
-      );
-    }
+  if (!notifications || notifications.length === 0) {
+  return (
+    <View style={styles.center}>
+      <Icon
+        name="bell-off"
+        size={40}
+        color={theme.text.secondary}
+      />
+
+      <AppText
+        variant="h3"
+        style={{
+          color: theme.text.secondary,
+          marginTop: 12,
+          textAlign: "center",
+        }}
+      >
+        No notifications yet
+      </AppText>
+    </View>
+  );
+}
 
     return (
       <FlatList
@@ -299,4 +305,10 @@ const styles = StyleSheet.create({
   time: {
     fontSize: 11,
   },
+  center: {
+  flex: 1,
+  justifyContent: "center",
+  alignItems: "center",
+  paddingHorizontal: 20,
+},
 });

@@ -1,9 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  Keyboard,
+  Alert,
   KeyboardAvoidingView,
-  Platform,
+  Keyboard,
+  Modal,
   Pressable,
+  Platform,
+  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,32 +14,40 @@ import {
   View,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { shallowEqual, useDispatch, useSelector } from "react-redux";
-import Icon from "react-native-vector-icons/Ionicons";
-import MaterialIcon from "react-native-vector-icons/MaterialCommunityIcons";
 import Animated, {
   Easing,
   useAnimatedStyle,
   useSharedValue,
-  withDelay,
-  withRepeat,
   withSequence,
-  withSpring,
   withTiming,
 } from "react-native-reanimated";
+import Icon from "react-native-vector-icons/Ionicons";
+import MaterialIcon from "react-native-vector-icons/MaterialCommunityIcons";
 
 import Grid from "../components/puzzle/Grid";
 import { SoundManager } from "../audio/SoundManager";
 import { GameHaptics } from "../utils/haptics";
-import { completeLevel, nextLevel, retryLevel, updateCellValue } from "../store/puzzleSlice";
+import {
+  completeLevel,
+  retryLevel,
+  setScore,
+  takeHint,
+} from "../store/puzzleSlice";
 import { usePuzzleValidation } from "../hooks/usePuzzleValidation";
+import {
+  calculateLevelReward,
+  getRewardMultiplier,
+} from "../utils/numberGameProgression";
+import { updateUserData } from "../store/userSlice";
+import api from "../services/api";
+import { useToast } from "../constants/context/ErrorContext";
 
-const selectMathPuzzle = state => ({
+const selectMathPuzzle = (state) => ({
   level: state.mathPuzzle.level,
   puzzle: state.mathPuzzle.puzzle,
-  streak: state.mathPuzzle.streak,
   score: state.mathPuzzle.score,
+  hintUsed: state.mathPuzzle.hintUsed,
 });
 
 function ProgressBar({ progress }) {
@@ -60,296 +71,340 @@ function ProgressBar({ progress }) {
   );
 }
 
-function StatCard({ label, value }) {
+function StatCard({ label, value, accent = false }) {
   return (
     <View style={styles.statCard}>
       <Text style={styles.statLabel}>{label}</Text>
-      <Text style={styles.statValue}>{value}</Text>
+      <Text style={[styles.statValue, accent && styles.statValueAccent]}>
+        {value}
+      </Text>
     </View>
   );
 }
 
-function ActionButton({ icon, label, onPress, primary }) {
-  const scale = useSharedValue(1);
-  const style = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
+function ActionButton({ icon, label, onPress, disabled = false, primary = false }) {
   return (
-    <Animated.View style={[styles.actionWrap, style]}>
-      <Pressable
-        style={[styles.actionButton, primary && styles.actionButtonPrimary]}
-        onPress={onPress}
-        onPressIn={() => {
-          scale.value = withTiming(0.95, { duration: 70 });
-        }}
-        onPressOut={() => {
-          scale.value = withSpring(1, { damping: 14, stiffness: 260 });
-        }}
+    <Pressable
+      style={({ pressed }) => [
+        styles.actionButton,
+        primary && styles.actionButtonPrimary,
+        disabled && styles.actionButtonDisabled,
+        pressed && !disabled && { transform: [{ scale: 0.98 }] },
+      ]}
+      onPress={onPress}
+      disabled={disabled}
+    >
+      <Icon
+        name={icon}
+        size={18}
+        color={primary ? "#04111f" : disabled ? "rgba(226,232,240,0.34)" : "#e5f4ff"}
+      />
+      <Text
+        style={[
+          styles.actionText,
+          primary && styles.actionTextPrimary,
+          disabled && styles.actionTextDisabled,
+        ]}
       >
-        <MaterialIcon name={icon} size={18} color={primary ? "#04111f" : "#e5f4ff"} />
-        <Text style={[styles.actionText, primary && styles.actionTextPrimary]}>{label}</Text>
-      </Pressable>
-    </Animated.View>
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
-function CompletionModal({ visible, level, score, streak, onNext, onRetry }) {
-  const progress = useSharedValue(0);
-  const particles = useMemo(
-    () => Array.from({ length: 22 }, (_, index) => ({
-      id: index,
-      left: `${8 + Math.random() * 84}%`,
-      top: `${12 + Math.random() * 32}%`,
-      size: 4 + Math.random() * 5,
-      delay: Math.random() * 220,
-      dx: (Math.random() - 0.5) * 70,
-      dy: 40 + Math.random() * 90,
-    })),
-    [visible]
-  );
-
-  useEffect(() => {
-    progress.value = visible
-      ? withTiming(1, { duration: 360, easing: Easing.out(Easing.cubic) })
-      : withTiming(0, { duration: 180 });
-  }, [progress, visible]);
-
-  const overlayStyle = useAnimatedStyle(() => ({
-    opacity: progress.value,
-  }));
-
-  const cardStyle = useAnimatedStyle(() => ({
-    opacity: progress.value,
-    transform: [
-      { translateY: (1 - progress.value) * 28 },
-      { scale: 0.94 + progress.value * 0.06 },
-    ],
-  }));
-
+function CompletionModal({
+  visible,
+  level,
+  score,
+  reward,
+  hintUsed,
+  onContinue,
+  onRetry,
+}) {
   if (!visible) return null;
 
   return (
-    <Animated.View style={[styles.modalOverlay, overlayStyle]}>
-      {particles.map(particle => (
-        <ModalParticle key={particle.id} particle={particle} />
-      ))}
-      <Animated.View style={[styles.modalCard, cardStyle]}>
-        <View style={styles.modalGlow} />
-        <Text style={styles.modalKicker}>Level {level}</Text>
-        <Text style={styles.modalTitle}>Complete</Text>
-        <Text style={styles.modalSubtitle}>+{10 + level + Math.min(streak, 10)} reward</Text>
-        <View style={styles.modalStats}>
-          <StatCard label="Score" value={score} />
-          <StatCard label="Streak" value={streak} />
+    <Modal transparent visible animationType="fade" onRequestClose={onContinue}>
+      <View style={styles.modalOverlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onContinue} />
+        <View style={styles.modalCard}>
+          <View style={styles.modalGlow} />
+          <Text style={styles.modalKicker}>Level {level}</Text>
+          <Text style={styles.modalTitle}>Solved</Text>
+          <Text style={styles.modalSubtitle}>
+            {hintUsed
+              ? "Hint used, so this level earns 1 point."
+              : `Reward is ${reward} based on the equation count and score tier.`}
+          </Text>
+
+          <View style={styles.modalStats}>
+            <StatCard label="Reward" value={reward} accent />
+            <StatCard label="Total" value={score} />
+          </View>
+
+          <TouchableOpacity style={styles.nextButton} onPress={onContinue}>
+            <Text style={styles.nextButtonText}>Continue</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.modalRetry} onPress={onRetry}>
+            <Text style={styles.modalRetryText}>Replay level</Text>
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity style={styles.nextButton} onPress={onNext}>
-          <Text style={styles.nextButtonText}>Next Level</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.modalRetry} onPress={onRetry}>
-          <Text style={styles.modalRetryText}>Replay level</Text>
-        </TouchableOpacity>
-      </Animated.View>
-    </Animated.View>
-  );
-}
-
-function ModalParticle({ particle }) {
-  const progress = useSharedValue(0);
-
-  useEffect(() => {
-    progress.value = withDelay(
-      particle.delay,
-      withRepeat(
-        withSequence(
-          withTiming(1, { duration: 900, easing: Easing.out(Easing.cubic) }),
-          withTiming(0, { duration: 0 })
-        ),
-        -1,
-        false
-      )
-    );
-  }, [particle.delay, progress]);
-
-  const style = useAnimatedStyle(() => ({
-    opacity: 1 - progress.value,
-    transform: [
-      { translateX: progress.value * particle.dx },
-      { translateY: progress.value * particle.dy },
-      { scale: 1 - progress.value * 0.5 },
-    ],
-  }));
-
-  return (
-    <Animated.View
-      style={[
-        styles.modalParticle,
-        {
-          left: particle.left,
-          top: particle.top,
-          width: particle.size,
-          height: particle.size,
-          borderRadius: particle.size / 2,
-        },
-        style,
-      ]}
-    />
+      </View>
+    </Modal>
   );
 }
 
 export default function Maths() {
   const navigation = useNavigation();
-  const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
-  const { level, puzzle, score, streak } = useSelector(selectMathPuzzle, shallowEqual);
+  const { level, puzzle, score, hintUsed } = useSelector(selectMathPuzzle, shallowEqual);
   const validation = usePuzzleValidation(false);
-  const [completeVisible, setCompleteVisible] = useState(false);
-  const completedRef = useRef(false);
-  const lastWrongCountRef = useRef(0);
-  const autoNextTimeoutRef = useRef(null);
-  const ambient = useSharedValue(0);
   const gridPulse = useSharedValue(0);
+const user=useSelector(state=>state.user)
+const { showToast } = useToast();
+
+  const [completionVisible, setCompletionVisible] = useState(false);
+  const [rewardPreview, setRewardPreview] = useState(0);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const completionGuardRef = useRef(false);
+ const [claimingReward, setClaimingReward] = useState(false);
+  const currentMultiplier = getRewardMultiplier(score);
 
   useEffect(() => {
-    ambient.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 3200, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0, { duration: 3200, easing: Easing.inOut(Easing.ease) })
-      ),
-      -1,
-      false
-    );
-  }, [ambient]);
+    completionGuardRef.current = false;
+    setCompletionVisible(false);
+    setRewardPreview(0);
+  }, [level]);
 
   useEffect(() => {
-    completedRef.current = false;
-    lastWrongCountRef.current = 0;
-    setCompleteVisible(false);
-    if (autoNextTimeoutRef.current) clearTimeout(autoNextTimeoutRef.current);
     gridPulse.value = withSequence(
-      withTiming(1, { duration: 180 }),
-      withTiming(0, { duration: 360 })
+      withTiming(1, { duration: 140 }),
+      withTiming(0, { duration: 320 })
     );
   }, [gridPulse, level]);
 
   useEffect(() => {
-    if (validation.wrongCount > lastWrongCountRef.current && !completedRef.current) {
-      GameHaptics.numberPuzzleWrong();
-      SoundManager.playNumberPuzzleWrong();
-    }
-    lastWrongCountRef.current = validation.wrongCount;
-  }, [validation.wrongCount]);
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showSub = Keyboard.addListener(showEvent, (event) => {
+      setKeyboardHeight(event?.endCoordinates?.height ?? 0);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   useEffect(() => {
-    if (!validation.allSolved || completedRef.current) return;
-    completedRef.current = true;
-    Keyboard.dismiss();
-    dispatch(completeLevel());
-    setCompleteVisible(true);
-    gridPulse.value = withSequence(
-      withTiming(1, { duration: 150 }),
-      withTiming(0, { duration: 560 })
-    );
+    if (!validation.allSolved || completionGuardRef.current || !puzzle) return;
+
+    completionGuardRef.current = true;
+    const reward = calculateLevelReward({
+      score,
+      equationCount: puzzle.equations.length,
+      hintUsed,
+    });
+
+    setRewardPreview(reward);
+    setCompletionVisible(true);
     GameHaptics.numberPuzzleComplete();
     SoundManager.playNumberPuzzleComplete();
+  }, [hintUsed, puzzle, score, validation.allSolved]);
 
-    autoNextTimeoutRef.current = setTimeout(() => {
-      dispatch(nextLevel());
-    }, 2800);
+  const handleContinue = () => {
+    setCompletionVisible(false);
+    dispatch(completeLevel());
+  };
 
-    return () => clearTimeout(autoNextTimeoutRef.current);
-  }, [dispatch, gridPulse, validation.allSolved]);
-
-  const ambientStyle = useAnimatedStyle(() => ({
-    opacity: 0.24 + ambient.value * 0.18,
-    transform: [{ scale: 1 + ambient.value * 0.08 }],
-  }));
-
-  const handleNext = useCallback(() => {
-    if (autoNextTimeoutRef.current) clearTimeout(autoNextTimeoutRef.current);
-    dispatch(nextLevel());
-  }, [dispatch]);
-
-  const handleRetry = useCallback(() => {
-    if (autoNextTimeoutRef.current) clearTimeout(autoNextTimeoutRef.current);
-    completedRef.current = false;
-    setCompleteVisible(false);
+  const handleRetry = () => {
+    completionGuardRef.current = false;
+    setCompletionVisible(false);
+    setRewardPreview(0);
     dispatch(retryLevel());
-  }, [dispatch]);
+  };
 
-  const handleHint = useCallback(() => {
+  const handleHint = () => {
     if (!puzzle) return;
-    const empty = Object.values(puzzle.cells).find(cell => cell.editable && cell.value === null);
-    if (!empty) return;
-    dispatch(updateCellValue({ cellId: empty.id, value: empty.solution }));
+    if (hintUsed) {
+      Alert.alert("Hint limit reached", "You can use only one hint on each level.");
+      return;
+    }
+
+    const editableCells = Object.values(puzzle.cells).filter((cell) => cell.editable);
+
+    const target =
+      editableCells.find((cell) => cell.value === null) || editableCells[0];
+
+    if (!target) {
+      Alert.alert("No hint available", "There are no editable cells left to reveal.");
+      return;
+    }
+
+    dispatch(
+      takeHint({
+        cellId: target.id,
+        value: target.solution,
+      })
+    );
     GameHaptics.numberPuzzleCorrect();
     SoundManager.playNumberPuzzleCorrect();
-  }, [dispatch, puzzle]);
+  };
+ const claimReward = async() => {
+  setClaimingReward(true);
+ if (score <= 0) {
+showToast( `No Points,Complete more levels to earn points!`, "failure");
 
+
+    return;
+  }
+
+  try {
+    const response = await api.post(
+      '/game/number-game',
+      {
+        level: level,
+        aura: score,
+      },
+    );
+
+    if (response?.data?.success) {
+      dispatch(setScore(0));
+      dispatch(
+    updateUserData({
+      aura:
+        (user?.userData?.aura || 0) + score,  
+    })
+  );
+showToast( `You claimed ${score} points.`, "success");
+  setClaimingReward(false);
+
+    }
+  } catch (err) {
+  setClaimingReward(false);
+
+    console.error(
+      'Claim reward error:',
+      err?.response?.data || err.message,
+    );
+showToast("Failed to Claim  Aura, Try again", "error");
+  }
+
+ }
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          {
-            paddingTop: Math.max(8, insets.top + 4),
-            paddingBottom: Math.max(10, insets.bottom + 8),
-          },
-        ]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        style={styles.keyboardContainer}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}
       >
-        <Animated.View style={[styles.ambientOrb, ambientStyle]} />
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: 20 + keyboardHeight },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          showsVerticalScrollIndicator={false}
+          automaticallyAdjustKeyboardInsets
+          nestedScrollEnabled
+        >
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.roundButton} onPress={() => navigation.goBack()}>
+              <Icon name="chevron-back" size={24} color="#f8fafc" />
+            </TouchableOpacity>
 
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.roundButton} onPress={() => navigation.goBack()}>
-            <Icon name="chevron-back" size={24} color="#f8fafc" />
-          </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <Text style={styles.title}>Number Game</Text>
-            <Text style={styles.subtitle}>Level {level}</Text>
+            <View style={styles.headerCenter}>
+              <Text style={styles.title}>Number Game</Text>
+              <Text style={styles.subtitle}>Level {level}</Text>
+            </View>
+
+            <View style={styles.levelBadge}>
+             
+            </View>
           </View>
-          <TouchableOpacity style={styles.roundButton} onPress={handleRetry}>
-            <MaterialIcon name="refresh" size={21} color="#f8fafc" />
-          </TouchableOpacity>
-        </View>
 
-        <View style={styles.heroCard}>
-          <View style={styles.heroTop}>
-            <StatCard label="Score" value={score} />
-            <StatCard label="Streak" value={streak} />
-            <StatCard label="Solved" value={`${validation.solvedCount}/${puzzle?.equations.length || 0}`} />
+          <View style={styles.heroCard}>
+            <View style={styles.heroTop}>
+              <StatCard label="Score" value={score} accent />
+              <StatCard
+                label="Solved"
+                value={`${validation.solvedCount}/${puzzle?.equations.length || 0}`}
+              />
+            </View>
+            <ProgressBar progress={validation.progress} />
+            <View style={styles.metaRow}>
+              <Text style={styles.metaText}>
+                {puzzle?.equations.length || 0} equations
+              </Text>
+              <Text style={styles.metaText}>
+                {Object.values(puzzle?.cells || {}).filter((cell) => cell.editable).length} cells
+              </Text>
+              <Text style={styles.metaText}>
+                {puzzle?.difficulty?.operators?.join(" ") || "+ -"}
+              </Text>
+            </View>
           </View>
-          <ProgressBar progress={validation.progress} />
-        </View>
 
-        <View style={styles.boardWrap}>
-          <Grid validationPulse={gridPulse} />
-        </View>
+          <View style={styles.boardWrap}>
+            <ScrollView
+  horizontal
+  showsHorizontalScrollIndicator={false}
+  contentContainerStyle={{
+    flexGrow: 1,
+    alignItems: "center",
+    justifyContent: "center",
+   
+  }}
+  nestedScrollEnabled={true}
+  
+>
 
-        <View style={styles.actionRow}>
-          <ActionButton icon="lightbulb-on-outline" label="Hint" onPress={handleHint} />
-          <ActionButton icon="reload" label="Retry" onPress={handleRetry} />
-          <ActionButton icon="arrow-right" label="Skip" onPress={handleNext} primary />
-        </View>
+            <Grid validationPulse={gridPulse} />
+</ScrollView>
 
-        <Text style={styles.helperText}>
-          Fill the missing numbers. Correct equations glow automatically.
-        </Text>
-      </ScrollView>
+          </View>
+
+          <View style={styles.actionRow}>
+            <ActionButton
+              icon="bulb"
+              label="Hint 1/1" 
+              onPress={handleHint}
+              disabled={!puzzle || hintUsed}
+            />
+            <ActionButton
+              icon="reload"
+              label="Retry"
+              onPress={handleRetry}
+              disabled={!puzzle}  
+            />
+            <ActionButton
+              icon="gift"
+              label="Reward"
+              onPress={claimReward}
+              disabled={claimingReward ||  score <= 0}
+            />
+          </View>
+
+         
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       <CompletionModal
-        visible={completeVisible}
+        visible={completionVisible}
         level={level}
         score={score}
-        streak={streak}
-        onNext={handleNext}
+        reward={rewardPreview}
+        hintUsed={hintUsed}
+        onContinue={handleContinue}
         onRetry={handleRetry}
       />
-    </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
@@ -358,18 +413,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#050816",
   },
+  keyboardContainer: {
+    flex: 1,
+  },
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 16,
-  },
-  ambientOrb: {
-    position: "absolute",
-    width: 420,
-    height: 420,
-    borderRadius: 210,
-    top: -180,
-    alignSelf: "center",
-    backgroundColor: "rgba(56, 189, 248, 0.36)",
+    paddingBottom: 20,
   },
   header: {
     height: 48,
@@ -400,6 +450,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
     marginTop: 1,
+  },
+  levelBadge: {
+    minWidth: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+   
+  },
+  levelBadgeText: {
+    color: "#7dd3fc",
+    fontSize: 14,
+    fontWeight: "900",
   },
   heroCard: {
     marginTop: 10,
@@ -434,6 +497,9 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     marginTop: 3,
   },
+  statValueAccent: {
+    color: "#7dd3fc",
+  },
   progressTrack: {
     height: 9,
     borderRadius: 999,
@@ -445,20 +511,27 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: "#38bdf8",
   },
+  metaRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 12,
+  },
+  metaText: {
+    color: "rgba(226,232,240,0.68)",
+    fontSize: 11,
+    fontWeight: "800",
+  },
   boardWrap: {
-    flex: 1,
-    justifyContent: "center",
+    
+    paddingVertical: 18,
   },
   actionRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 10,
-  },
-  actionWrap: {
-    flex: 1,
-    marginHorizontal: 4,
+    gap: 10,
   },
   actionButton: {
+    flex: 1,
     height: 48,
     borderRadius: 17,
     flexDirection: "row",
@@ -472,6 +545,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#7dd3fc",
     borderColor: "#7dd3fc",
   },
+  actionButtonDisabled: {
+    opacity: 0.45,
+  },
   actionText: {
     color: "#e5f4ff",
     fontWeight: "900",
@@ -481,11 +557,15 @@ const styles = StyleSheet.create({
   actionTextPrimary: {
     color: "#04111f",
   },
+  actionTextDisabled: {
+    color: "rgba(226,232,240,0.34)",
+  },
   helperText: {
     color: "rgba(226,232,240,0.54)",
     textAlign: "center",
     fontSize: 12,
     fontWeight: "700",
+    marginTop: 14,
   },
   modalOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -493,10 +573,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 24,
-  },
-  modalParticle: {
-    position: "absolute",
-    backgroundColor: "#7dd3fc",
   },
   modalCard: {
     width: "100%",
@@ -533,6 +609,7 @@ const styles = StyleSheet.create({
     color: "rgba(226,232,240,0.68)",
     fontWeight: "800",
     marginTop: 6,
+    textAlign: "center",
   },
   modalStats: {
     width: "100%",

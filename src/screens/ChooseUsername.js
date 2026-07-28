@@ -87,7 +87,7 @@ const checkUsername = async () => {
   setLoading(true);
 
   try {
-    const response = await fetch("http://localhost:5001/auth/check-username", {
+    const response = await fetch("https://api.aurameter.in/auth/check-username", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username }),
@@ -96,7 +96,7 @@ const checkUsername = async () => {
     const data = await response.json();
 
     if (!response.ok) {
-      showError(data.error || "Something went wrong");
+      showError(data.message || "Something went wrong");
     } else if (data.available) {
       navigation.navigate("AddEmailAndPassword", { username });
     } else {

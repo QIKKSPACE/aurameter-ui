@@ -1,6 +1,13 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { selectBallSortLevel, nextLevel } from '../store/ballSortSlice';
+import {
+  selectBallSortLevel,
+  selectBallSortPendingAura,
+  selectBallSortRewardQueuedForLevel,
+  nextLevel,
+  queueLevelReward,
+  claimPendingAura,
+} from '../store/ballSortSlice';
 import { StyleSheet, View, Dimensions, SafeAreaView, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'react-native-linear-gradient';
@@ -15,6 +22,7 @@ import { GameHaptics } from '../utils/haptics';
 import TutorialOverlay from '../components/ballsort/TutorialOverlay';
 import WinOverlay from '../components/ballsort/WinOverlay';
 import HelpModal from '../components/ballsort/HelpModal';
+import GameOverOverlay from '../components/ballsort/GameOverOverlay';
 import { updateUserData } from '../store/userSlice';
 import { useToast } from '../constants/context/ErrorContext';
 import api from '../services/api';
@@ -25,8 +33,14 @@ const BallSortScreen = () => {
   const { theme } = useTheme();
   const dispatch = useDispatch();
   const level = useSelector(selectBallSortLevel);
+  const pendingAura = useSelector(selectBallSortPendingAura);
+  const rewardQueuedForLevel = useSelector((state) =>
+    selectBallSortRewardQueuedForLevel(state, level),
+  );
   const [movingBall, setMovingBall] = useState(null);
   const [showHelp, setShowHelp] = useState(false);
+  const [suppressWinOverlay, setSuppressWinOverlay] = useState(false);
+  const [claimingAura, setClaimingAura] = useState(false);
   const [tubeLayoutMap, setTubeLayoutMap] = useState({});
   const moveCompletedRef = useRef(false);
   const user=useSelector(state=>state.user)
@@ -40,8 +54,13 @@ const BallSortScreen = () => {
     selectedTube,
     setSelectedTube,
     hasWon,
+    hasLost,
     isMoving,
     setIsMoving,
+    movesUsed,
+    moveLimit,
+    movesRemaining,
+    registerMove,
     tubeLayouts,
     onTubeLayout,
     handleUndo,
@@ -61,6 +80,20 @@ const BallSortScreen = () => {
     setMovingBall(null);
     moveCompletedRef.current = false;
   }, [level]);
+
+  useEffect(() => {
+    if (!hasWon || rewardQueuedForLevel) {
+      return;
+    }
+
+    dispatch(queueLevelReward({ level, reward: level }));
+  }, [dispatch, hasWon, level, rewardQueuedForLevel]);
+
+  useEffect(() => {
+    if (!hasWon) {
+      setSuppressWinOverlay(false);
+    }
+  }, [hasWon]);
 
   const applyMove = useCallback((fromIdx, toIdx) => {
     setTubes((prev) => {
@@ -102,7 +135,7 @@ const BallSortScreen = () => {
   };
 
   const handleTubePress = (index) => {
-    if (isMoving || hasWon) return;
+    if (isMoving || hasWon || hasLost) return;
 
     if (selectedTube === index) {
       setSelectedTube(-1);
@@ -168,9 +201,10 @@ const BallSortScreen = () => {
 
     setHistory((prev) => [...prev, tubes.map(t => [...t])]);
     applyMove(fromIdx, toIdx);
+    registerMove();
     setMovingBall(null);
     setIsMoving(false);
-  }, [applyMove, movingBall, tubes, setHistory, setIsMoving]);
+  }, [applyMove, movingBall, registerMove, tubes, setHistory, setIsMoving]);
 
   useEffect(() => {
     if (!movingBall) return undefined;
@@ -187,6 +221,7 @@ const BallSortScreen = () => {
   );
 
   const handleNextLevel = () => {
+    setSuppressWinOverlay(true);
     dispatch(nextLevel());
   };
 
@@ -196,14 +231,23 @@ const BallSortScreen = () => {
     }
   };
  const handleClaimReward = async () => {
+  if (claimingAura) {
+    return;
+  }
 
-  
+  if (pendingAura <= 0) {
+    showToast("No pending Aura to claim yet.", "error");
+    return;
+  }
+
+  setClaimingAura(true);
+
   try {
     const response = await api.post(
       '/game/ball-sort-game',
       {
         level: level,
-        aura: level,
+        aura: pendingAura,
       },
     );
 
@@ -212,10 +256,11 @@ const BallSortScreen = () => {
       dispatch(
     updateUserData({
       aura:
-        (user?.userData?.aura || 0) + level,
+        (user?.userData?.aura || 0) + pendingAura,
     })
   );
-showToast( `You claimed ${level} points.`, "success");
+dispatch(claimPendingAura());
+showToast( `You claimed ${pendingAura} points.`, "success");
 handleNextLevel()
     }
   } catch (err) {
@@ -223,7 +268,9 @@ handleNextLevel()
       'Claim reward error:',
       err?.response?.data || err.message,
     );
-showToast("Failed to Claim  Aura, Try again", "error");
+    showToast("Failed to Claim  Aura, Try again", "error");
+  } finally {
+    setClaimingAura(false);
   }
 
 
@@ -246,6 +293,8 @@ showToast("Failed to Claim  Aura, Try again", "error");
         />
         <GameControls 
           level={level} 
+          movesUsed={movesUsed}
+          moveLimit={moveLimit}
           onUndo={handleUndo} 
           onRestart={handleRestart} 
           onHint={handleHint}
@@ -285,7 +334,15 @@ showToast("Failed to Claim  Aura, Try again", "error");
           )}
         </View>
 
-        <WinOverlay visible={hasWon} onNextLevel={handleNextLevel} claimReward={handleClaimReward} />
+        <WinOverlay
+          visible={hasWon && !suppressWinOverlay}
+          onNextLevel={handleNextLevel}
+          claimReward={handleClaimReward}
+          rewardAmount={pendingAura}
+          claimDisabled={claimingAura || pendingAura <= 0}
+          claimLabel={claimingAura ? "Claiming..." : undefined}
+        />
+        <GameOverOverlay visible={hasLost} onReplay={handleRestart} remainingMoves={movesRemaining} moveLimit={moveLimit} />
         <HelpModal visible={showHelp} onClose={() => setShowHelp(false)} />
       </SafeAreaView>
     </View>

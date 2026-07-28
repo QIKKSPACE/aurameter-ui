@@ -24,17 +24,17 @@ export const GAME_CONFIG = {
   // ============================================
   FOOD_POINTS: {
     normal: 1,
-    golden: 5,
+    golden: 4,
     speed: 2,
-    shield: 2,
+    shield: 3,
     red_apple: 5,
   },
   
   // Food spawn thresholds (probability-based)
   FOOD_SPAWN_THRESHOLDS: {
-    shield: { minScore: 12, probability: 0.9 },      // spawn if score >= 12 and random > 0.9
-    golden: { minScore: 8, probability: 0.78 },      // spawn if score >= 8 and random > 0.78
-    speed: { minScore: 5, probability: 0.63 },       // spawn if score >= 5 and random > 0.63
+    shield: { minScore: 20, probability: 0.985 },    // very rare
+    golden: { minScore: 12, probability: 0.96 },     // rare
+    speed: { minScore: 6, probability: 0.9 },        // occasional
   },
 
   // Food spawning configuration
@@ -49,6 +49,13 @@ export const GAME_CONFIG = {
   TICK_SPEED_REDUCTION_PER_STEP: 8,                   // ms reduction per score step
   SPEED_BOOST_REDUCTION: 35,                          // ms reduction when speed boosted
   SPEED_BOOST_DURATION: 18,                           // Number of moves with speed boost active
+  SPEED_PRESETS: [
+    { id: "slow", label: "Slow", tickSpeed: 520 },
+    { id: "normal", label: "Normal", tickSpeed: 400 },
+    { id: "fast", label: "Fast", tickSpeed: 300 },
+    { id: "insane", label: "Insane", tickSpeed: 220 },
+  ] as const,
+  DEFAULT_SPEED_PRESET: "normal" as const,
 
   // Red Apple (timer-based special food)
   RED_APPLE_SPAWN_INTERVAL: 8000,                     // Spawn a red apple every 8 seconds
@@ -211,6 +218,7 @@ export const GAME_CONFIG = {
   
   STORAGE_KEY_HIGH_SCORE: "@aurameter/snake-high-score",
   STORAGE_KEY_GAME_STATE: "@aurameter/snake-state",
+  STORAGE_KEY_SPEED_PRESET: "@aurameter/snake-speed-preset",
 
   // ============================================
   // CHALLENGE METADATA
@@ -242,6 +250,8 @@ export const GAME_CONFIG = {
     PACE_STEADY: "Steady",
     PACE_RISING: "Rising",
     PACE_FAST: "Fast",
+    SPEED_LABEL: "Speed",
+    SPEED_SELECT_LABEL: "Select speed",
     SWIPE_HINT: "Swipe anywhere in the pad to steer. Reverse turns are blocked.",
     CONTROL_UP: "UP",
     CONTROL_DOWN: "DOWN",

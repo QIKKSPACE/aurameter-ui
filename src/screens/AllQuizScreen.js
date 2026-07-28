@@ -168,7 +168,7 @@ const isEmpty = !loading && !displayQuizzes.length;
       {!isDraft && (
         <TouchableOpacity
           onPress={() => {
- navigation.navigate("StoryUploadScreen", { quiz: item });
+            navigation.navigate("PostStory", { quiz: item });
             // TODO: dispatch(sendQuizToStory(item.localId))
           }}
         >

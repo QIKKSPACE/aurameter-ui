@@ -1,4 +1,11 @@
 export type Direction = "UP" | "DOWN" | "LEFT" | "RIGHT";
+export type SnakeSpeedPresetId = "slow" | "normal" | "fast" | "insane";
+
+export type SnakeSpeedPreset = {
+  id: SnakeSpeedPresetId;
+  label: string;
+  tickSpeed: number;
+};
 
 export type DifficultyTier = "Beginner" | "Intermediate" | "Advanced" | "Extreme";
 
@@ -53,6 +60,8 @@ export const GRID_SIZE = GAME_CONFIG.GRID_SIZE;
 export const INITIAL_DIRECTION: Direction = GAME_CONFIG.INITIAL_DIRECTION;
 export const COUNTDOWN_STEPS = GAME_CONFIG.COUNTDOWN_STEPS;
 export const SPEED_STEP_SCORE = GAME_CONFIG.SPEED_STEP_SCORE;
+export const SPEED_PRESETS = GAME_CONFIG.SPEED_PRESETS;
+export const DEFAULT_SPEED_PRESET = GAME_CONFIG.DEFAULT_SPEED_PRESET;
 export const COMBO_WINDOW_MS = GAME_CONFIG.COMBO_WINDOW_MS;
 export const SNAKE_STORAGE_KEY = GAME_CONFIG.STORAGE_KEY_HIGH_SCORE;
 

@@ -1,4 +1,4 @@
-    import { ActivityIndicator, Alert, Image, Modal, PermissionsAndroid, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
+    import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Modal, PermissionsAndroid, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
     import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
     import { useTheme } from '../constants/context/ThemeContext';
     import { useDispatch, useSelector } from 'react-redux';
@@ -340,7 +340,9 @@
       "chat_id",
       message.chat_id
     );
-
+    if (message.content) {
+  formData.append("content", message.content);
+}
     formData.append(
       "message_type",
       message.message_type
@@ -559,7 +561,9 @@
     formData.append("local_id", message.local_id);
 
     formData.append("receiver_id", other_user_id);
-
+    if (message.content) {
+  formData.append("content", message.content);
+}
     if (message.waveform) {
     formData.append(
     "waveform",
@@ -719,6 +723,12 @@
     };
     return (
     <ScreenBackground>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "padding"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 24}
+      >
+
     <View style={styles.container}>
     <ChatHeader  theme={theme} other_user_id={other_user_id} other_username={other_username} 
     other_avatar={other_avatar} navigation={navigation} onOpenSheet={()=>{setShowSyickerSheet(true)}}
@@ -916,6 +926,8 @@
     </View>
     </View>
     </Modal>
+</KeyboardAvoidingView>
+
     </ScreenBackground>
     )
     }
